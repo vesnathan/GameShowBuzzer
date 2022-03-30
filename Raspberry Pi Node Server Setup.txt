@@ -1,0 +1,116 @@
+ENABEL SSH and change PW
+sudo raspi-config
+change password: zngzDDYO1gFaLvFtGptn
+
+sudo apt-get update
+sudo apt-get dist-upgrade
+
+sudo apt-get install apache2 -y
+
+sudo apt-get install php -y
+sudo apt-get install mysql-server php-mysql -y
+sudo service apache2 restart
+
+sudo mysql_secure_installation
+	'Enter current password for root (enter for none)' press enter
+	new password: gbkIb6_k@lXPtQl2-mn4
+	answer Y to everything
+	
+sudo apt-get install phpmyadmin
+	select 'apache2'
+	'Configure database etc...' select Yes
+	password: wFSUGNnOggj8Dot3MUGv
+	
+sudo nano /etc/apache2/apache2.conf  (cntrl-V to get to bottom then paste the below)
+	Include /etc/phpmyadmin/apache.conf
+	cntrl-x -> y -> enter
+	
+sudo /etc/init.d/apache2 restart
+
+sudo mysql -u root -p
+	pass: gbkIb6_k@lXPtQl2-mn4
+	
+	> use mysql;
+	> SELECT User, Host, Password FROM mysql.user;
+	> GRANT ALL PRIVILEGES ON *.* TO 'phpmyadmin'@'localhost';
+	> update user set authentication_string=password(''), plugin='mysql_native_password' where user='root';
+	> flush privileges;
+	> quit;
+
+Download and install Putty and open
+enter ip address and port 22, select ssh
+enter a name in 'saved sessions' and click save
+got to Connection->SSH->Tunnels
+enter source port 8888 and destination localhost:80
+got back to 'Session'
+click save again and click open
+
+
+uname phpmyadmin is phpmyadmin USE FIREFOX (NOT CHROME - PRIVELGES DON'T WORK IN CHROME)
+go to 127.0.0.1:8888/phpmyadmin/
+create db 'gsb' and import gsb.sql
+
+	
+
+	
+#sudo usermod -a -G www-data pi
+#sudo usermod -a -G www-data pi
+#sudo chmod g+s /var/www/html 755 -R
+
+Navigate to this directory
+	cd /var/www/html
+	
+sudo chmod 777 /var/www/html -R
+	copy files via filezilla
+
+
+	
+install Node.js	
+	sudo curl -sL https://deb.nodesource.com/setup_10.x | sudo -E bash -
+	sudo apt-get install -y nodejs
+	sudo node -v
+
+npm init	
+
+install mysql	
+	sudo npm install mysql --save
+	
+install forever	
+	sudo npm install forever --save -g
+	
+install express
+	sudo npm install express --save 
+
+install express-ip
+	sudo npm install express-ip
+	
+install socket.io
+	sudo npm install socket.io --save
+
+Make node server run at boot
+	sudo crontab -e
+	choose option 2
+	@reboot sudo forever start -o out.log -e err.log /var/www/html/index.js
+	cntrl-x -> y -> enter
+Rout port 80 to port 3000, then make it persistent
+	sudo iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 80 -j REDIRECT --to-port 3000
+	sudo apt-get install iptables-persistent
+	select yes for all
+	
+sudo reboot
+
+sudo raspi-config
+SSID: GameShowScoringSystem
+Pass: 26345550
+
+sudo reboot
+
+Scoreboard: 	B8-27-EB-76-BC-71 		192.168.0.100
+Server: 		B8-27-EB-2A-D3-43 		192.168.0.102
+Router:			C0-25-E9-76-E9-06		192.168.0.1
+	
+sudo chmod 755 /var/www/html -R	
+TURN OF SSH
+
+sudo forever start -o out.log -e err.log index.js
+

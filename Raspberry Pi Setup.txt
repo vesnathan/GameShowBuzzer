@@ -1,0 +1,43 @@
+sudo apt-get update -y
+
+sudo apt-get upgrade -y
+sudo apt-get dist-upgrade -y
+sudo apt-get autoremove -y
+
+sudo apt-get install -y chromium-browser ttf-mscorefonts-installer unclutter x11-xserver-utils
+
+sudo apt-get install matchbox-keyboard
+
+
+
+sudo nano .config/lxsession/LXDE-pi/autostart
+
+--------------------------------------------------------------------
+# CHANGED
+#@xscreensaver -no-splash
+
+# BEGIN ADDED
+
+# Normal website that does not need any exceptions
+@/usr/bin/chromium-browser --incognito --start-maximized --kiosk http://gordonturner.com
+# Enable mixed http/https content, remember if invalid certs were allowed (ie self signed certs)
+#@/usr/bin/chromium-browser --incognito --start-maximized --kiosk --allow-running-insecure-content --remember-cert-error-decisions http://gordonturner.com
+@unclutter
+@xset s off
+@xset s noblank
+@xset -dpms
+
+# END ADDED
+-----------------------------------------------------------------
+
+sudo nano /boot/config.txt
+Add one of these to the bottom:
+display_rotate=1 90 degrees
+
+To shutdown the Chromium browser when it is full screen type at the same time:
+
+shift control q
+
+Disable WiFi
+sudo nano /boot/config.txt
+dtoverlay=pi3-disable-wifi

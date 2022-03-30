@@ -1,0 +1,321 @@
+<!doctype html>
+<html>
+<head>  
+    <title>Player 1</title> 
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=0, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+        
+        body                        { font: Tahoma, Geneva, sans-serif; background: #222222; font-size: 2vw;}
+        #disabled                   { display: none; opacity:1; background-color:#000000; color: #ffffff; text-align: center; position:fixed; width:100%; height:100%; top:0px; left:0px; z-index:1000; }
+        #status                     { font-weight: bold; color: #ff0000; }
+        #footer                     { position: fixed; bottom: 0; width: 100%; }
+        
+        
+        
+        .text-input                 { height: 26px; width: 85px; text-align: center;}
+        #code-input-div             { opacity:1; background-color:#000000; color: #ffffff; text-align: center; position:fixed; width:99%; height:99%; top:0px; left:0px; z-index:1000;  font-size: 5vw;}
+        #code-div                   { position: relative; top: 50%; transform: translateY(-50%); font-size: 25.5vw; }
+        
+        #wrapper                    { position: fixed;  top: 0;  left: 0;  bottom: 0;  right: 0;  overflow: hidden; border: 2vw solid; background-color: #400000;}
+        
+        #nameNumberScoreHolder      { border: 1px solid #cccccc; background-color: #000000; width: 80%; padding: 2vw;   left: 0;  right: 0;  margin: 0 auto; margin-top: 2vw;}
+        #playerNumberHolder         { font-size: 4vw; color: #FFFFFF; width: 100%; text-align: center; left: 0;  right: 0;  margin: 0 auto;} 
+        #player-name                { font-size: 4vw; color: #FFFFFF; width: 100%; text-align: center; left: 0;  right: 0;  margin: 0 auto;overflow: hidden; white-space: nowrap;}
+        #player-score               { font-size: 4vw; color: #FFFFFF; width: 100%; text-align: center; left: 0;  right: 0;  margin: 0 auto;}
+        
+        #circleHolder               { position: relative; clear: both; /*top: 50%; transform: translateY(-50%); */ margin-top: 5vw;}
+        #fullCircle                 { position: relative; left: 50%;  transform: translateX(-50%); width: 50%; padding-top: 50%;  /*background: #66161d;*/ border-radius: 50%; border: 1vw solid #000000; }
+        
+        .clear                      { clear: both; }
+        /*#player-score               { font-size: 25.5vw;color: #FFFFFF; width: 80%; text-align: center; border: 1px solid #cccccc; background-color: #000000;left: 0;  right: 0;  margin: 0 auto; }*/
+        
+        #disabled-div               { opacity:1; background-color:#000000; color: #ffffff; text-align: center; position:fixed; width:99%; height:99%; top:0px; left:0px; z-index:1000; display: none;}
+        #offline-div                { opacity:1; background-color:#000000; color: #ffffff; text-align: center; position:fixed; width:99%; height:99%; top:0px; left:0px; z-index:1000; display: none;font-size: 5vw;}
+    
+    </style> 
+    <script>
+
+    </script>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="jquery-1.11.1.js"></script>
+<script>
+    $(function () {
+        
+        
+        var pushButtonID;
+        var mean;
+        var controllerID = 'NULL';
+        var playerID;
+        var playerName;
+        var PlayerScore;
+        var playerStatus;
+        var pushButtonStatus;
+        var buttonOffColor;
+        var myInterval;
+        var buttonScreenBGColor;
+        var myTimeOut;
+        var buttonScreenBGColor;
+        var borderColor;
+        
+        var socket = io.connect({
+            reconnection: true,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax : 5000,
+            reconnectionAttempts: Infinity
+        });
+        socket.on('reconnect_attempt', function(reason){
+            $('#offline-div-reason').append('.');
+        });
+        socket.on('disconnect', function(reason){
+            $('#offline-div').show();
+            $('#offline-div-reason').html(reason);
+            $('#offline-div-reason').append('<br>Reconnecting<br>');
+            if (reason === 'io server disconnect') {
+                // the disconnection was initiated by the server, you need to reconnect manually
+                socket.connect();
+            }
+        });
+        
+        socket.on('connect', function(reason){
+            socket.emit('button-reconnected', controllerID+"|"+pushButtonID);
+            $('#offline-div').hide();
+        });
+        
+        socket.on('refresh', function(msg){    
+            location.reload();
+        });
+        
+        /*
+        socket.on('push-button-renewed', function(msg){
+        console.log('push-button-renewed: '+msg);  
+            $('#offline-div-reason').html('');
+            $('#offline-div').hide();
+            clearInterval(myInterval);
+        });
+        */
+        
+        function LightenDarkenColor(col, amt) {
+                var usePound = false;
+                if (col[0] == "#") {
+                    col = col.slice(1);
+                    usePound = true;
+                }
+                var num = parseInt(col,16);
+                var r = (num >> 16) + amt;
+                if (r > 255) r = 255;
+                else if  (r < 0) r = 0;
+                var b = ((num >> 8) & 0x00FF) + amt;
+                if (b > 255) b = 255;
+                else if  (b < 0) b = 0;
+                var g = (num & 0x0000FF) + amt;
+                if (g > 255) g = 255;
+                else if (g < 0) g = 0;
+                return (usePound?"#":"") + (g | (b << 8) | (r << 16)).toString(16);
+        }
+
+        socket.emit('new connection', "Player Push Button");
+        
+        
+        socket.on('Player Push Button', function(msg){
+        console.log('Player Push Button: connected - '+msg); 
+            $('#status').text(''); 
+            pushButtonID = msg;
+            $('#status').css({color:'#CCCCCC'}); });
+            var num_requests = 50;
+            var mean = 0;        
+            function findServerTimeOffset() {
+                socket.on('dong', function(data) {
+                    if (!data.hasOwnProperty('d')) {
+                        console.log('socket.io-time-sync: client received message with missing data');
+                        
+                    }
+                mean += data.d / num_requests;
+            });
+
+            for (var i = 0; i < num_requests; i++) {
+                socket.emit('ding', {t: (new Date()).valueOf()});
+            }
+
+                
+            $(window).unload(function() {
+                socket.emit('player-push-button-closed', pushButtonID);
+            });
+        }
+        socket.on('scorescreen-bg-image-updated', function(msg){
+            $('#wrapper').css({'background-image': 'url("'+msg+'")'});
+            $('#wrapper').css('border','0vw');
+            $('#wrapper').css('background-size','cover');
+            buttonOffColor = "000000";
+            $('#fullCircle').css({'background-color': '#'+buttonOffColor,'opacity' : '0.6'});
+            
+        });
+        socket.on('bing', function(msg) { 
+        var now = new Date();
+            socket.emit('bong', "Push Button "+pushButtonID+" Ponged at "+now.getDate()+"/"+now.getMonth()+"/"+now.getFullYear()+" "+now.getHours()+":"+now.getMinutes()+":"+now.getSeconds());
+        });
+        socket.on('answer-clear', function(msg){
+            if (playerStatus != 'disabled') {
+                $( "#wrapper" ).css({'background-color' : '#'+buttonScreenBGColor});
+                borderColor = LightenDarkenColor(buttonScreenBGColor, 40);
+                $('#wrapper').css({borderColor:'#'+borderColor});
+                $( "#fullCircle" ).css({'background-color' : '#'+borderColor});
+                $( "#fullCircle" ).show();
+                playerStatus = 'enabled';
+            }
+        });
+        socket.on('first-to-buzz-in', function(msg){ // controllerID|pushButtonID|playerID|timePressed|dateReadable|playerNumber
+        console.log('button: first-to-buzz-in: '+msg);
+            $( "#wrapper" ).css({'background-color' : '#FF8400'});
+            borderColor = LightenDarkenColor('FF8400', 40);
+            $('#wrapper').css({borderColor:'#'+borderColor});
+            buttonOffColor = borderColor;
+            $('#fullCircle').css({'background-color': '#'+buttonOffColor,'opacity' : '1'});
+            if(myTimeOut){ clearTimeout(myTimeOut); }
+        });
+        socket.on('reset-button-highlight', function(msg){
+        console.log('button: reset-button-highlight: '+msg);
+            if (playerStatus == 'enabled') {
+                $( "#wrapper" ).css({'background-color' : '#'+buttonScreenBGColor});
+                borderColor = LightenDarkenColor(buttonScreenBGColor, 40);
+                $('#wrapper').css({borderColor:'#'+borderColor});
+                buttonOffColor = borderColor;
+                $('#fullCircle').css({'background-color': '#'+buttonOffColor,'opacity' : '0.6'});
+            }
+        });
+        socket.on('player-disabled-enabled-exclude', function(msg){ // playerID|disabled|controllerID|true/false (remove from scoreboard)
+            console.log('button: player-disabled-enabled: '+msg);
+                var msgSplit = msg.split("|");
+                var playerID = msgSplit[0];
+                
+            if (playerStatus != 'disabled' || msgSplit[1] == 'reset-disabled') {
+                playerStatus = msgSplit[1];
+                if (playerStatus == 'exclude' || playerStatus == 'disabled') { 
+                   $( "#wrapper" ).css({'background-color':'#CCCCCC'});
+                    borderColor = LightenDarkenColor('CCCCCC', 40);
+                    $( "#wrapper" ).css({borderColor:'#'+borderColor}); 
+                    $( "#fullCircle" ).hide();
+                    $('#wrapper').css({'opacity':'0.2'});
+                }
+                if (playerStatus == 'enabled' || playerStatus == 'reset-disabled') {  
+                 
+                   $( "#wrapper" ).css({'background-color':'#'+buttonScreenBGColor});
+                     borderColor = LightenDarkenColor(buttonScreenBGColor, 40);
+                    $( "#wrapper" ).css({borderColor:'#'+borderColor}); 
+                    $( "#fullCircle" ).show();
+                    $('#wrapper').css({'opacity':'1'});
+                }
+                if (playerStatus == 'reset-disabled') {
+                    playerStatus = 'enabled';
+                }
+            }
+            
+        });
+        socket.on('correct-code-inputed', function(msg){ //controllerID|pushButtonID|playerID|playerName|PlayerScore|playerStatus|pushButtonStatus|playerNumber|buttonScreenBGColor|buttonScreenBGImage (playerNumber = the n-th player to add a button for this team
+            console.log('button: correct-code-inputed - '+msg);
+            msgSplit = msg.split("|");
+            controllerID = msgSplit[0];
+            pushButtonID = msgSplit[1];
+            playerID = msgSplit[2];
+            playerName = msgSplit[3];
+            PlayerScore = msgSplit[4];
+            playerStatus = msgSplit[5];
+            pushButtonStatus = msgSplit[6];
+            playerNumber = msgSplit[7];
+            buttonScreenBGColor = msgSplit[8];
+            buttonScreenBGImage = msgSplit[9];
+            $('#code-input-div').hide();
+            if (playerStatus == 'disabled' ) {
+                $('#disabled-div').hide();
+            }
+            else {
+                if (pushButtonStatus == 'disabled') {
+                    
+                }            
+            }
+            $('#player-name').text(playerName.toUpperCase());
+            $('#player-score').text('SCORE: '+PlayerScore);
+            $('#playerNumberHolder').text('BUTTON '+playerNumber);
+            $('#wrapper').css({'background-color':'#'+buttonScreenBGColor});
+            borderColor = LightenDarkenColor(buttonScreenBGColor, 40);
+            $('#wrapper').css({borderColor:'#'+borderColor});
+            buttonOffColor = LightenDarkenColor(buttonScreenBGColor, 40);
+            $('#fullCircle').css({'background-color': '#'+buttonOffColor});
+            if (buttonScreenBGImage != "DEFAULT") {
+                socket.emit('request-player-button-bg-image', playerID);
+            }
+            
+        });
+        
+            socket.on('player-image-received', function(msg){ // ,base64Image); // 
+                
+                $('#wrapper').css({'background-image': 'url("'+msg+'")'});
+                $('#wrapper').css('border','0vw');
+                $('#wrapper').css('background-size','cover');
+                buttonOffColor = "000000";
+                $('#fullCircle').css({'background-color': '#'+buttonOffColor,'opacity' : '0.6'});
+            });
+        
+        socket.on('player-name-change', function(msg){ // newName
+            $('#player-name').text(msg.toUpperCase());
+            console.log('player-name-change: '+msg);
+        });
+        
+        socket.on('player-score-change', function(msg){ // newName
+            $('#player-score').text('SCORE: '+msg);
+            console.log('button: player-score-change: '+msg);
+        });
+        
+        socket.on('player-screen-bgcolor-changed', function(msg){ // newColor
+             buttonScreenBGColor = msg;
+            $('#wrapper').css({'background-color':'#'+buttonScreenBGColor});
+            borderColor = LightenDarkenColor(buttonScreenBGColor, 40);
+            $('#wrapper').css({borderColor:'#'+borderColor});
+            if (buttonOffColor != "000000") { buttonOffColor = LightenDarkenColor(buttonScreenBGColor, 40); }
+            $('#fullCircle').css({'background-color': '#'+buttonOffColor,'opacity' : '0.6'});
+        });
+        
+        $( "#fullCircle" ).mousedown(function() {
+            $( "#fullCircle" ).css({'background-color' : '#FF0000','opacity' : '1'});
+            var timePressed = ((new Date()).valueOf()+mean);
+            var dataToSend = controllerID+"|"+pushButtonID+"|"+playerID+"|"+timePressed+"|"+playerNumber;
+            socket.emit('Button Pressed', dataToSend);
+
+        });
+        $( "#fullCircle" ).mouseup(function() {
+            myTimeOut = setTimeout(function() {
+                $('#fullCircle').css({'background-color': '#'+buttonOffColor,'opacity' : '0.6'});
+            },1000);
+        });
+        
+        findServerTimeOffset();
+        $('#push-button-code-input').change(function(){
+            // send message to control panel that a code has been input
+            socket.emit('push-button-code-input', pushButtonID+"|"+$(this).val());
+        });
+        
+    });
+</script>
+    </head>
+<body>
+    <div id='disabled-div'></div>
+<div id='wrapper'>
+    <div id='nameNumberScoreHolder'>
+        <div id='player-name'></div>
+        <div id='playerNumberHolder'></div>
+        <div id='player-score'></div>
+    </div>
+    <div class='clear'></div>
+    <div id='circleHolder'>
+        <div id="fullCircle"></div>
+    </div>
+</div>
+<div id='code-input-div'>BUTTON CODE<br>Input your teams button code.<br><div id='code-div'><input id='push-button-code-input' class='text-input ui-corner-all ui-widget'></div></div>
+    <div id='disabled-div'></div>
+    <div id='offline-div'>SCREEN IS OFF-LINE.<br>ATTEMPTING TO RECONNECT<div id='offline-div-reason'></div></div>
+
+    
+<div id='footer'><div id='status'>NOT CONNECTED</div></div>
+
+</body>
+</html>

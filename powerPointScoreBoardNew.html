@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <style>
+        
+        body                        { font: Tahoma, Geneva, sans-serif; background-color: #400000; font-size: 5px; height: 100%; margin: 0;  }
+
+        #status                     { font-weight: bold; color: #ff0000; }
+        #footer                     { position: fixed; bottom: 0; width: 99%; }
+        
+        #code-input-div             { opacity:1; background-color:#000000; color: #ffffff; text-align: center; position:fixed; width:100%; height:100%; top:0px; left:0px; z-index:1000; font-size: 10px;}
+        #code-div                   { position: relative; top: 50%; transform: translateY(-50%); font-size: 100px; }
+        
+        #scoreboardHolder           { position: fixed;  top: 0;  left: 0;  bottom: 0;  right: 0;  overflow: auto;border: 2vw solid; }
+        .playerWrapper              { position: absolute; width: 80%; padding: 5px; border: 1px solid #cccccc; background-color: #000000; display: none; left: 0;  right: 0;  margin: 0 auto;}
+        .playerNameScoreWrapper     { position: relative; width: 100%;  top: 50%; left: 50%; transform: translate(-50% , -50%);  }
+        .playerName                 { text-shadow: 2px 2px #000000; font-size: 22px; color: #f7f7f7; float: left; font-weight: bold; width: 70%; overflow: hidden; white-space: nowrap; margin-left: 10px; line-height: 22px;}
+        .playerScore                { text-shadow: 2px 2px #000000; font-size: 22px; color: #f7f7f7; float: right; font-weight: bold; margin-right: 10px; width: 10%; text-align: right; }
+        .playerPushButtonHolder     { height: 30px; width: 30px; float: left; margin-right: 5px;}
+        .playerPushButton           { height: 30px; width: 30px; border: 1px solid #CCCCCC; background-color: #FF0000;  display: none; color: #FFFFFF; font-size: 20px; line-height: 20px; text-align: center; font-weight: bold;}
+        #offline-div                { opacity:1; background-color:#000000; color: #ffffff; text-align: center; position:fixed; width:99%; height:99%; top:0px; left:0px; z-index:1000; display: none;font-size: 30px;}
+    
+    </style>
+    <link rel="stylesheet" href="/jquery-ui.css">
+    <script src="/socket.io/socket.io.js"></script>
+    
+    <script src="/jquery-1.12.4.js"></script>
+ <script>
+         var scoreboardID = 'NULL';
+        var controllerID = 'NULL';
+        var numPlayers = 0;
+        var autoReOrder = 'disabled';
+        var scoreboardFontColor = "F7F7F7";
+        var scoreboardBGColor = "400000";
+        var SBTeamBGPlyScrBG = 'disabled';
+        var teamBGImages = [];
+        var scoreboardBorderToggle = 'on';
+        var scoreboardTopMargin = '10';
+     
+     function getUrlVars()  {
+            var vars = [], hash;
+            var hashes = window.location.href.slice(window.location.href.indexOf('?') + 1).split('&');
+            for(var i = 0; i < hashes.length; i++)  {
+                hash = hashes[i].split('=');
+                vars.push(hash[0]);
+                vars[hash[0]] = hash[1];
+            }
+            return vars;
+        }  
+     
+     
+        $( function() {
+            
+            
+            function rgb2hex(rgb) {
+                if (/^#[0-9A-F]{6}$/i.test(rgb)) return rgb;
+
+                rgb = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+                function hex(x) {
+                    return ("0" + parseInt(x).toString(16)).slice(-2);
+                }
+                return "#" + hex(rgb[1]) + hex(rgb[2]) + hex(rgb[3]);
+            }
+            function pickTextColorBasedOnBgColorSimple(bgColor, lightColor, darkColor) {
+              var color = (bgColor.charAt(0) === '#') ? bgColor.substring(1, 7) : bgColor;
+              var r = parseInt(color.substring(0, 2), 16); // hexToR
+              var g = parseInt(color.substring(2, 4), 16); // hexToG
+              var b = parseInt(color.substring(4, 6), 16); // hexToB
+              return (((r * 0.299) + (g * 0.587) + (b * 0.114)) > 186) ?
+                darkColor : lightColor;
+            }
+            function LightenDarkenColor(col, amt) {
+                var usePound = false;
+                if (col[0] == "#") {
+                    col = col.slice(1);
+                    usePound = true;
+                }
+                var num = parseInt(col,16);
+                var r = (num >> 16) + amt;
+                if (r > 255) r = 255;
+                else if  (r < 0) r = 0;
+                var b = ((num >> 8) & 0x00FF) + amt;
+                if (b > 255) b = 255;
+                else if  (b < 0) b = 0;
+                var g = (num & 0x0000FF) + amt;
+                if (g > 255) g = 255;
+                else if (g < 0) g = 0;
+                return (usePound?"#":"") + (g | (b << 8) | (r << 16)).toString(16);
+            }
+            
+            function sortFunction(a, b) {
+                if (a[1] === b[1]) {
+                    return 0;
+                }
+                else {
+                    return (a[1] < b[1]) ? 1 : -1;
+                 }
+             }
+            function reorderByScore() {
+                console.log('reorderByScore');
+                var scoreArray = [];
+                var currentPosition = 1;
+                $('.playerWrapper').each(function(i, obj) {
+                        console.log($(this).css('top'));
+                    playerWrapperID = $(this).attr('id'); // player-wrapper-ID
+                    var playerID = $(this).attr('id').replace("playerWrapper","");
+                    if ($(this).is(":visible")){
+                        currentPlayerScore = parseInt($("#"+$(this).attr('id').replace("playerWrapper","player-score-input-")).text(),10);
+                        console.log(playerID+"|"+currentPlayerScore+"|"+currentPosition);
+                        var teamArray = [playerID,currentPlayerScore,currentPosition];
+                        currentPosition++;
+                    }
+                    else {
+                        var teamArray = [playerID,currentPlayerScore,0];
+                    }
+                    scoreArray.push(teamArray);
+                });
+                scoreArray.sort(sortFunction);
+                var dataToSend = '';
+                for (var i = 0; i < scoreArray.length; i++) {
+                    if (scoreArray[i][2] != 0) {
+                        var newTop = ((parseInt((i+1)*45))+parseInt(scoreboardTopMargin));
+                        $("#playerWrapper"+scoreArray[i][0]).animate({top: newTop+"vw"}, 1000);
+                        if (dataToSend != '') {
+                            dataToSend = dataToSend + "|"+ scoreArray[i][0]+'|'+(i+1);
+                        }
+                        else {
+                            dataToSend = scoreArray[i][0]+'|'+(i+1);
+                        }
+                        
+                    }
+                }
+                socket.emit('scoreboard-reordered',dataToSend);
+            }
+            
+            
+            var socket = io.connect({
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionDelayMax : 5000,
+                reconnectionAttempts: Infinity
+            });
+            socket.on('reconnect_attempt', function(reason){
+                $('#offline-div-reason').append('.');
+            });
+            socket.on('disconnect', function(reason){
+                $('#offline-div').show();
+                $('#offline-div-reason').html(reason);
+                $('#offline-div-reason').append('<br>Reconnecting<br>');
+                if (reason === 'io server disconnect') {
+                    // the disconnection was initiated by the server, you need to reconnect manually
+                    socket.connect();
+                }
+            });
+            
+            socket.on('connect', function(reason){   
+                socket.emit('scoreboard-reconnected', controllerID+"|"+scoreboardID);
+                $('#offline-div').hide();
+            });
+
+            socket.on('refresh', function(msg){    
+                location.reload();
+            });
+            
+            // Tell the server we're here
+            socket.emit('new connection', "powerPointScoreboard|"+getUrlVars()["ip"]);
+            
+
+            
+            // Message back from server to say it hears us
+            socket.on('powerPointScoreboard', function(msg){  // _localControllerID|newScoreboardID       
+                $('#status').text('');
+                msgSplit = msg.split("|");
+                var controllerID = msgSplit[0].replace("_",'');
+                var scoreboardID = msgSplit[1];
+                
+                $('#offline-div').hide();
+                $('#code-input-div').hide();
+                socket.emit('scoreboard-code-entered', controllerID+'|'+scoreboardID);
+                
+                socket.emit('powerPointScoreboardWhichButtonWasPressed', "answer-clear|"+getUrlVars()["ip"]);
+                
+
+            });
+            
+            socket.on('bing', function(msg) {
+            var now = new Date();
+                socket.emit('bong', "Score Board "+scoreboardID+" Ponged at "+now.getDate()+"/"+now.getMonth()+"/"+now.getFullYear()+" "+now.getHours()+":"+now.getMinutes()+":"+now.getSeconds());
+            });
+            // sent if the code entered on the control panel is correct. If so we hide the code div and save the controller ID that this scoreboard belongs to for future use.
+            
+            
+            socket.on('scoreboard-code-input', function(msg){    // scoreboardID|controllerID|scoreboardAutoReorder|scoreboardFontColor|scoreboardBGColor|scoreboardTopMargin|scoreboardBorder|SBTeamBGPlyScrBG|scoreboardBGImage
+                                                                    
+                console.log('scoreboard: scoreboard-code-input: ' + msg);
+                var msgSplit = msg.split("|");
+                if (msgSplit[0] == scoreboardID){
+                    $('#code-input-div').hide();
+                    controllerID = msgSplit[1];  
+                    $('#scoreboardHolder').css({'background-color':'#'+msgSplit[4]});
+                    
+                    
+                    $('.playerName').css({'color':'#'+msgSplit[3]});
+                    $('.playerScore').css({'color':'#'+msgSplit[3]});
+                    
+                    autoReOrder = msgSplit[2];
+                    scoreboardFontColor = msgSplit[3];
+                    scoreboardBGColor = msgSplit[4];
+                    scoreboardTopMargin = msgSplit[5];
+                    scoreboardBorder = msgSplit[6];
+                    SBTeamBGPlyScrBG = msgSplit[7];
+                    scoreboardBGImage = msgSplit[8];
+                    
+                    if (scoreboardBGImage != 'DEFAULT') { 
+                        socket.emit('request-scoreboard-bg-image', controllerID+"|"+scoreboardBGImage); 
+                    }
+                    
+                    if (scoreboardBorder == 'on') {
+                    borderColor = LightenDarkenColor(msgSplit[4], 40);
+                        $('#scoreboardHolder').css({'border':' 2vw solid #'+borderColor});
+                    }
+                    else {
+                        $('#scoreboardHolder').css({'border':'none'});
+                    }
+                    
+                    
+                    $(window).unload(function() {
+                        socket.emit('scoreboard-screen-closed', msgSplit[1]+"|"+msgSplit[0]);
+                    });
+                }
+            });
+            
+            socket.on('scoreboardImageReceived', function(msg){ // ,base64Image); // 
+                scoreboardBgImageBase64Data = msg;    
+                borderColor = '000000';
+                $('#scoreboardHolder').css({'background-image': 'url("'+scoreboardBgImageBase64Data+'")'});
+                
+                $('#scoreboardHolder').css('background-size','100vw 100vh');
+                //if (scoreScreenBorderButton == 'off') { $('#playerScreenHolder').css('border','0vw'); } else { $('#playerScreenHolder').css('border','2vw solid #'+borderColor); }
+            });
+            
+            socket.on('player-added', function(msg){         
+                var msgSplit = msg.split("|");              // controllerID | player-name-input-playerID | player-button-playerID | playerName | playerScore | playerStatus | playerPosition | teamScoreScreenBGImage
+                var controllerID = msgSplit[0];
+                var playerIDSplit = msgSplit[1].split("-");
+                var playerID = playerIDSplit[3];
+                var playerName = msgSplit[3];
+                var playerScore = msgSplit[4];
+                var playerStatus= msgSplit[5];
+                var playerPosition = msgSplit[6];
+                var teamScoreScreenBGImage = msgSplit[7];
+                $('body').append("\
+                    <div id='playerWrapper"+playerID+"' class='playerWrapper'>\
+                        <div class='playerNameScoreWrapper'>\
+                            <div class='playerPushButtonHolder'>\
+                                <div id='playerPushButton"+playerID+"' class='playerPushButton'></div>\
+                            </div>\
+                            <div id='player-name-input-"+playerID+"' class='playerName' style='color: #"+scoreboardFontColor+";'>"+playerName.toUpperCase()+"</div>\
+                            <div id='player-score-input-"+playerID+"' class='playerScore' style='color: #"+scoreboardFontColor+";'>"+playerScore+"</div>\
+                        <div>\
+                    </div>\
+                ");
+                if (playerStatus != 'disabled') { $("#playerWrapper"+playerID).show(); numPlayers++; }
+                if (teamScoreScreenBGImage != 'DEFAULT') { socket.emit('request-scoreboard-playerscreen-image',playerID); }
+                reorderByScore();
+            });
+            
+            socket.on('player-disabled-enabled-exclude', function(msg){ // playerID|disabled/enabled/exclude/reset-disabled|controllerID|true/false (remove from scoreboard)
+                console.log('scoreboard: player-disabled-enabled-exclude: '+msg);
+                var msgSplit = msg.split("|");
+                var playerID = msgSplit[0];
+                var playerStatus = msgSplit[1];
+                var controllerID = "_"+msgSplit[2];
+                var removeFromScoreboard = msgSplit[3];
+                var playerWrapperHeight = parseFloat($('#playerWrapper'+playerID).outerHeight());
+                if (removeFromScoreboard == 'true') {
+                    if (playerStatus == 'disabled') {
+                        var disabledTop = parseFloat($('#playerWrapper'+playerID).css('top'));
+                        $('#playerWrapper'+playerID).hide(); 
+                        numPlayers--;
+                        $('.playerWrapper').each(function(){
+                            if ($(this).is(":visible")) {
+                                var thisTop = parseFloat($(this).css('top'));
+                                if (thisTop > disabledTop) {
+                                    var newTop = thisTop - playerWrapperHeight-3; 
+                                    $(this).animate({top: newTop+"px"}, 1000);         
+                                }
+                            }
+                        });
+                    }
+                    else {
+                        $('#playerWrapper'+playerID).show();
+                        numPlayers++;
+                        
+                        if (autoReOrder == 'enabled') { 
+                            reorderByScore(); 
+                        } 
+                        else {
+                           var newTop = (parseInt(((numPlayers)*45))+parseInt(scoreboardTopMargin));
+                            $('#playerWrapper'+playerID).css({top: newTop+"px"}, 1000);  
+                        }
+                    }
+                }
+                else { if (playerStatus == 'exclude') { $('#playerWrapper'+playerID).css({'opacity': '0.2'}); } }
+            }); 
+            
+            socket.on('player-image-received', function(msg){// playerID|imageBase64
+                //// console.log('scoreboard: player-image-received: '+msg);
+                var msgSplit = msg.split("|");
+                var playerID = msgSplit[0];
+                var imageBase64 = msgSplit[1];
+                found = false;
+                if (SBTeamBGPlyScrBG == 'enabled') { $('#playerWrapper'+playerID).css({'background-image': 'url("'+imageBase64+'")','background-size':'cover'}); }
+                
+                
+                // see if user alread has a BG image loaded
+                for (i=0; i < teamBGImages.length; i++) {
+                    if (teamBGImages[i].playerID == playerID) {
+                        teamBGImages[i].imageBase64 = imageBase64;
+                        found = true;
+                    }
+                }
+                if (!found) {
+                    teamBGImages.push({playerID: playerID, imageBase64: imageBase64});
+                } 
+                
+            });
+            
+            socket.on('player-name-change', function(msg){ 
+                
+                msgSplit = msg.split("|");
+                var playerID = msgSplit[0];
+                var newName = msgSplit[1].toUpperCase();
+                $('#player-name-input-'+playerID).text(newName);
+            });
+            
+            socket.on('player-score-change', function(msg){ //  playerID+"|"+newScore+"|"+scoreboardCorrectColor+"|"+scoreboardIncorrectColor+"|"+scoreboardBGColor+"|"+highlightChange);   
+                // console.log('scoreboard: player-score-change: '+msg);
+                msgSplit = msg.split("|");
+                var playerID = msgSplit[0];
+                var newScore = parseInt(msgSplit[1]);
+                var scoreboardCorrectColor = msgSplit[2];
+                var scoreboardIncorrectColor = msgSplit[3];
+                var scoreboardBGColor = msgSplit[4];
+                var highlightChange = msgSplit[5];
+                var currentScore = parseInt($('#player-score-input-'+playerID).text());
+                var oldColor = rgb2hex($('#playerWrapper'+playerID).css('background-color'));
+                
+                var newColor;
+                if (newScore > currentScore) { newColor = scoreboardCorrectColor; } else { newColor = scoreboardIncorrectColor; }
+                
+                if (highlightChange == 'true') {
+                    $('#playerWrapper'+playerID).css({'background-image':'none'});
+                    $('#playerWrapper'+playerID).css({'background-color': '#'+newColor});
+                    //$('#player-name-input-'+playerID).css({'color': '#000000'});
+                    //$('#player-score-input-'+playerID).css({'color': '#000000'});
+                    setTimeout(function(){
+                        $('#playerWrapper'+playerID).css({'background-color': oldColor});
+                        //$('#player-name-input-'+playerID).css({'color': '#FFFFFF'});
+                        //$('#player-score-input-'+playerID).css({'color': '#FFFFFF'}); 
+                        for (i=0; i < teamBGImages.length; i++) {
+                            if (teamBGImages[i].playerID == playerID) {
+                                $('#playerWrapper'+playerID).css({'background-image': 'url("'+teamBGImages[i].imageBase64+'")','background-size':'cover'});
+                            }
+                        }
+                    },3000);
+                }
+                $('#player-score-input-'+playerID).text(newScore);
+                
+            });
+            
+            
+            socket.on('SB-TeamBG-PlyScrBG-disabled', function(msg){ // _controlPanelID|enabled/disabled
+                console.log('scoreboard: SB-TeamBG-PlyScrBG-disabled: '+msg);
+                var msgSplit = msg.split("|");
+                var controllerID = "_"+msgSplit[0];
+                var status = msgSplit[1];
+                SBTeamBGPlyScrBG = 'disabled';
+                $('.playerWrapper').css({'background-color':'#000000'});
+                $('.playerName').css({'color':'#FFFFFF'});
+                $('.playerScore').css({'color':'#FFFFFF'});
+                $(".playerWrapper").css({'background-image': 'none','background':'transparent','border':'none'});
+                
+            });
+            
+            socket.on('SB-TeamBG-PlyScrBG-enabled', function(msg){ // playerID-scoreScreenBGColor|playerID-scoreScreenBGColor|playerID-scoreScreenBGColor|playerID-scoreScreenBGColor etc
+                
+                console.log('scoreboard: SB-TeamBG-PlyScrBG-enabled: '+msg);
+                var msgSplit = msg.split("|");
+                SBTeamBGPlyScrBG = 'enabled';
+                
+                for (i=0; i < msgSplit.length; i++) {
+                    var msgSplit2 = msgSplit[i].split("-");
+                    for (p=0; p < teamBGImages.length; p++) {
+                        if (teamBGImages[p].playerID == msgSplit2[0]) {
+                            $('#playerWrapper'+msgSplit2[0]).css({'background-image': 'url("'+teamBGImages[p].imageBase64+'")','background-size':'cover'});
+                        }
+                        else {
+                            $('#playerWrapper'+msgSplit2[0]).css({'background-color':'#'+msgSplit2[1]});
+                        }
+                    }
+                    
+                }
+                $('.playerWrapper').css({'border': '1px solid #cccccc'});
+                
+                // console.log('SB-TeamBG-PlyScrBG-enabled finished');
+            });
+            socket.on('scorescreen-bg-image-updated',function(msg) { // playerID|imageBase64
+                // console.log('scoreboard: scorescreen-bg-image-updated: '+msg);
+                var msgSplit = msg.split("|");
+                var playerID = msgSplit[0];
+                var imageBase64 = msgSplit[1];
+                found = false;
+                $('#playerWrapper'+playerID).css({'background-image': 'url("'+imageBase64+'")','background-size':'cover'});
+                
+                
+                // see if user alread has a BG image loaded
+                for (i=0; i < teamBGImages.length; i++) {
+                    if (teamBGImages[i].playerID == playerID) {
+                        teamBGImages[i].imageBase64 = imageBase64;
+                        found = true;
+                    }
+                }
+                if (!found) {
+                    teamBGImages.push({playerID: playerID, imageBase64: imageBase64});
+                }
+                
+                
+            });
+            socket.on('answer-clear', function(msg){ //playerID|BGColor
+                // console.log('scoreboard: answer-clear: '+msg);
+                var msgSplit = msg.split("|");
+                for (i=0; i < msgSplit.length; i++) {
+                    if (i % 2 == 0) {
+                            
+                        if (rgb2hex($('#playerWrapper'+msgSplit[i]).css('background-color')) == "#cccccc"){
+                            $('#playerWrapper'+msgSplit[i]).css({'background-color': '#'+msgSplit[i+1]});
+                            $('#player-name-input-'+msgSplit[i]).css({'color': '#FFFFFF'});
+                            $('#player-score-input-'+msgSplit[i]).css({'color': '#FFFFFF'});
+                            
+                        }
+                        $('#playerWrapper'+msgSplit[i]).css({'opacity': '1'});
+                    }
+                }
+            });
+            
+
+            
+            socket.on('reorder-scoreboard', function(msg){
+                if (autoReOrder == 'enabled') { reorderByScore(); }
+            });
+            
+            
+            
+            // sent when the reorder-by-score-button or auto-reorder-button is pressed. possible values = now or enabled or disabled 
+            socket.on('reorder-by-score',function(msg){ // now|controllerID
+                msgSplit = msg.split("|");
+                switch (msgSplit[0]) {
+                    case 'now': 
+                        reorderByScore();
+                        break;
+                    case 'enabled':
+                        autoReOrder = 'enabled';
+                        break;
+                    case 'disabled':
+                        autoReOrder = 'disabled';
+                        break;
+                }
+                
+            }); 
+            socket.on('scoreboard-bg-color-change',function(msg){// controlPanelID|FFFFFF
+                msgSplit = msg.split("|");
+                scoreboardBGColor = msgSplit[1];
+                $('#scoreboardHolder').css({'background-color':'#'+msgSplit[1]});
+                borderColor = LightenDarkenColor(msgSplit[1], 40);
+                $('#scoreboardHolder').css({'borderColor':'#'+borderColor});
+    
+            });
+            
+            socket.on('Button Pressed', function(msg){ // controllerID|pushButtonID|playerID|timePressed|playerNumber
+                // console.log("here");
+                msgSplit = msg.split("|");
+                var controllerID = msgSplit[0];
+                var pushButtonID = msgSplit[1];
+                var playerID = msgSplit[2];
+                var playerNumber = msgSplit[4];
+                
+                $('#playerPushButton'+playerID).text(playerNumber).show();
+                setTimeout(function() { $('#playerPushButton'+playerID).hide(); },1000);
+                // console.log(msg);
+                
+            });
+    
+            socket.on('first-to-buzz-in', function(msg){ // controllerID|pushButtonID|playerID|timePressed|dateReadable|playerNumber
+                var msgSplit = msg.split("|");
+                var controllerID = msgSplit[0];
+                var pushButtonID = msgSplit[1];
+                var playerID = msgSplit[2];
+                var timePressed = msgSplit[3];
+                var playerNumber = msgSplit[5];
+                $('#playerPushButton'+playerID).text(playerNumber).show();
+                // console.log('first-to-buzz-in: '+msg);
+            });
+
+            socket.on('reset-scoreboard-highlight', function(msg){ 
+                $('.playerPushButton').hide();
+            });
+            
+            socket.on('scoreboard-bg-image-updated', function(msg){ 
+                $("#scoreboardHolder").css({'background-image': 'url("'+msg+'")'});      
+                $("#scoreboardHolder").css('background-size','100vw 100vh');    
+            });
+            
+            socket.on('scoreboardBorderToggle', function(msg){ // controlPanelID|val
+                var msgSplit = msg.split("|");
+                console.log('scoreboard: scoreboardBorderToggle - '+msg);
+                if (msgSplit[1] == 'on') {
+                    scoreboardBorderToggle = 'on';
+                    borderColor = LightenDarkenColor(scoreboardBGColor, 40);
+                    $('#scoreboardHolder').css('border','2vw solid #'+borderColor);
+                }
+                else {
+                    scoreboardBorderToggle = 'off';
+                    $('#scoreboardHolder').css('border','none');
+                }
+                
+            });
+            
+            socket.on('scoreboard-top-margin-changed', function(msg){ // controlPanelID|val
+                var msgSplit = msg.split("|");
+                console.log('scoreboard: scoreboard-top-margin-changed - '+msg);
+                scoreboardTopMargin = msgSplit[1];
+                reorderByScore();
+            });
+            
+        });
+    </script>
+    
+    
+  </head>
+<body>
+    <div id='scoreboardHolder'>
+    <div id='footer'><div id='status'>NOT CONNECTED</div></div>
+        <div style='clear: both;'></div>
+    </div>
+    <div id='code-input-div'>SCOREBOARD SCREEN CODE<br>Enter this code into the control panel SETTINGS tab.<br><div id='code-div'></div></div>
+    <div id='offline-div'>SCREEN IS OFF-LINE.<br>ATTEMPTING TO RECONNECT<div id='offline-div-reason'></div></div>
+    
+    
+    </body>
+</html>

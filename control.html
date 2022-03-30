@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <style>
+        #status                     { font-weight: bold; color: #ff0000; }
+        #footer                     { position: fixed; bottom: 0; width: 100%; }
+
+        #tabs                       { height: 830px; }
+        th                          { font-size: 10px;   background-color: #cccccc;}
+        td                          {  padding: 5px; }
+
+        
+        #player-table               { display: none; }
+        .text-input                 { height: 26px; width: 85px; text-align: center;}
+        .player-name-input          { width: 200px; }
+        
+        .playerButtonHolder         { width: 110px; float: left; padding: 5px; }
+        .player-score-button        { width: 80px; height: 70px;}
+        .player-score-button-label  { width: 80px; height: 70px; }
+        
+        .player-button-label         { width: 50px; }
+        .player-button               { width: 50px; }
+        
+        .answer-button              { width: 250px; }
+        #answerButtonHolder         { clear: both; padding: 25px 5px 5px 5px; display: none; }
+        
+        #player-score-buttons-message { font-weight: bold; }
+        #change-player-settings     { display: none; }
+        .scoreboardControls         { display: none; }
+        .fullCircle                 { background: #66161d; color: #ffffff; width: 26px; height: 26px; border-radius: 50%; float: left;text-align:center; line-height: 26px; font-size: 15px; margin-right:5px;}
+        
+        .floatright                 { float: right; }
+        #startShowDiv               { display: none; }
+        #scoring-holder             { display: none; }
+        #new-show-name-input        { width: 255px; }
+        #new-show-password-input    { width: 255px; }
+        #open-show-password-input   { width: 255px; }
+        #offline-div                { opacity:1; background-color:#000000; color: #ffffff; text-align: center; position:fixed; width:99%; height:99%; top:0px; left:0px; z-index:1000; display: none;font-size: 5vw;}
+        .score-screen-settings-buttons  {   width: 10px; height: 10px; }
+        .score-screen-settings-labels  {   width: 10px; height: 10px; }
+        .header td                  { font-size: 10px; font-weight: bold; text-align: center; border-right: 1px solid #cccccc;border-left: 1px solid #cccccc;}
+    </style>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    
+    <!-- UNCOMMENT THIS FOR ONLINE VERSION 
+    <link rel="stylesheet" href="/jquery-ui.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script> 
+    -->
+
+    <!-- UNCOMMENT THIS FOR RASPI VERSION -->
+    <link rel="stylesheet" href="/jquery-ui.css">
+    <script src="/jquery-1.12.4.js" type="application/javascript"></script>
+    <script src="/jquery-ui.js" type="application/javascript"></script>
+    
+    
+    <script src="/jscolor.js" type="application/javascript"></script>
+    <script src="/sounds.js" type="application/javascript"></script>
+    
+    <!-- Stylesheet and JS for file  input -->
+    <link href="/style.css" rel="stylesheet">
+    <script src="/jquery-form-elements.js" type="application/javascript"></script>
+    
+    <!-- ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// -->
+    
+    <script>
+ 
+        var counter = 1;
+        var numPlayers = 3;
+        var controlPanelID = 'NULL';
+        var playerIDsUsed = [];
+        var showStarted = false;
+        var buttonsPressedInRound = [];
+        var customBuzzerSounds = [];
+        var myinterval;
+        var excludeWho = 'team';
+        var soundPlaying = false;
+        var globalShowName = '';
+        var scoreboardBorder = 'true';
+        var hideTeamBgs = 'off';
+        function sortFunction(a, b) {
+                if (a[3] === b[3]) {
+                    return 0;
+                }
+                else {
+                    return (a[3] < b[3]) ? -1 : 1;
+                 }
+             }
+        
+        
+        $( function() {
+            var ipAddress = window.location.host;
+            $('#window-location-host').text(ipAddress);
+            
+            
+            
+            function playSound(whichOne, playerID) {
+                var snd = new Audio(defaultBuzzer);
+                switch(whichOne) {
+                    case "pressed" : 
+                        // look through customBuzzerSounds array to find if the player has a custom sound
+                        
+                        for (i=0; i< customBuzzerSounds.length; i++) {
+                            if (customBuzzerSounds[i].playerID == playerID) {
+                                var snd = new Audio(customBuzzerSounds[i].soundData); 
+                            }
+                        }
+                        break
+                    case "correct" :
+                        var snd = new Audio(correctSound); 
+                        break
+                    case "incorrect" :
+                        var snd = new Audio(incorrectSound);
+                        break
+                }
+                if (soundPlaying == true){
+                    setTimeout(function(){
+                        soundPlaying = true;
+                        snd.play();
+                    },1200);
+                }
+                else {
+                    soundPlaying = true;
+                    snd.play();
+                }
+
+                snd.addEventListener("ended", function(){
+                     snd.currentTime = 0;
+                    soundPlaying = false;
+                });
+            }
+            
+            var socket = io.connect({
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionDelayMax : 5000,
+                reconnectionAttempts: Infinity
+            });
+            
+            socket.on('reconnect_attempt', function(reason){
+                $('#offline-div-reason').append('.');
+            });
+            
+            socket.on('disconnect', function(reason){
+                $('#offline-div').show();
+                $('#offline-div-reason').html(reason);
+                $('#offline-div-reason').append('<br>Reconnecting<br>');
+                if (reason === 'io server disconnect') {
+                    // the disconnection was initiated by the server, you need to reconnect manually
+                    socket.connect();
+                }
+            });
+            
+            socket.on('connect', function(reason){
+                socket.emit('controller-reconnected', controlPanelID);
+                $('#offline-div').hide();
+            });
+            
+            $(window).unload(function() {
+                socket.emit('control-panel-closed', controlPanelID);
+            });
+            
+            // Tell the server we're here
+            socket.emit('new connection', "Control Screen");
+            
+
+            $("#open-saved-show").selectmenu().on('selectmenuchange', function() { 
+                
+            });
+            
+            socket.on('bing', function(msg) {
+                var now = new Date();
+                socket.emit('bong', "Control Panel "+controlPanelID+" Ponged at "+now.getDate()+"/"+now.getMonth()+"/"+now.getFullYear()+" "+now.getHours()+":"+now.getMinutes()+":"+now.getSeconds());
+            });
+            
+            socket.on('saved-shows', function(msg) { 
+                showNameSplit = msg.split("Ox|xo");
+                $('#open-saved-show').append($('<option>', {
+                    value: msg,
+                    text: showNameSplit[1]
+                }));
+                counter++;
+            });
+            
+            $("#open-show").button().click(function(){ 
+                var showName = $("#open-saved-show").find("option:selected").text();
+                var password = $("#open-show-password-input").val();
+                if (showName != "" && password != "") {
+                    socket.emit('load-show', showName+"|"+controlPanelID+"|"+password);
+                }
+                else {
+                    alert("Please select a show and enter a password.");   
+                }
+                
+            });
+            
+            $("#new-show-ok-button").button().click(function(){ 
+                var showName = $("#new-show-name-input").val();
+                var password = $("#new-show-password-input").val();
+                if (showName != "" && password != "") {
+                    
+                    if ($("#new-show-password-input").val().match(/^[0-9a-zA-Z]*$/)) {
+                    //if (password.match(/^[0-9a-zA-Z]$/)) {
+                        socket.emit('new-show-ok-button', controlPanelID+"|"+showName+"|"+password); 
+                    }
+                    else {
+                        alert("Password can only contain letters a-z and A-Z, and numbers 0-9");
+                    }
+                }
+                else {
+                    alert("Please enter a show name and a password.");   
+                }
+            });
+            
+            socket.on('new-show-name-ok', function(msg){ // true/false|newShowName  
+                // console.log('new-show-name-ok: '+msg);
+                var msgSplit = msg.split("|");
+                var newNameOK = msgSplit[0];
+                var newShowName = msgSplit[1];
+                if (newNameOK == 'true') {
+                    $('#newShowLoadShowDiv').hide();
+                    $('#scoring-holder').show(); 
+                    $( "#tabs" ).tabs( "enable" );
+                    globalShowName = newShowName;
+                }
+                else {
+                    alert('Show name exists! Please choose a new name.');
+                }
+            });
+            
+            socket.on('monitorScreenLog', function(msg){   
+                $('#monitorScreenLogDiv').append(msg+'<br>');
+            });
+            
+            // Message back from server to say it hears us
+            socket.on('Control Screen', function(msg){         
+                // Change "Not Connected" in the footer to the control panel ID
+                $('#status').text(msg);
+                $('#status').css({color:'#CCCCCC'});
+                controlPanelID = msg;
+                
+            
+                
+
+                function isInArray(arr, obj) {
+                    for(var i=0; i<arr.length; i++) {
+                        if (arr[i] == obj) return true;
+                    }
+                    return false;
+                }
+                var playerIDsUsed = [];
+                var playerCounter = 1;
+                
+                function requestPlayerButtonID() {
+                    var newID = Math.floor(Math.random()*90000) + 10000;
+                    newID.toString();
+                    while (isInArray(playerIDsUsed, newID)) {
+                        newID = Math.floor(Math.random()*90000) + 10000;
+                        newID.toString();
+                    }
+                    playerIDsUsed.push(newID);
+                    return newID;      
+                }
+
+                function addPlayer(playerID,playerName,playerScore,scoreScreenBGColor,sendEmit,playerSoundFileName,scoreScreenNameTopMargin,scoreScreenScoreTopMargin,scoreScreenShowScoreButton,scoreScreenShowNameButton,scoreScreenScoreBgButton,scoreScreenNameBgButton,scoreScreenBorderButton,scoreScreenBgImage,playerScreenNameScoreBgOpacity){ 
+                    // console.log(playerID+"|"+playerName+"|"+playerScore+"|"+scoreScreenBGColor+"|"+sendEmit+"|"+playerSoundFileName+"|"+scoreScreenNameTopMargin+"|"+scoreScreenScoreTopMargin+"|"+scoreScreenShowScoreButton+"|"+scoreScreenShowNameButton+"|"+scoreScreenScoreBgButton+"|"+scoreScreenNameBgButton+"|"+scoreScreenBorderButton+"|"+scoreScreenBgImage+"|"+playerScreenNameScoreBgOpacity)
+                     /*
+                    playerID
+                    playerName
+                    playerScore
+                    scoreScreenBGColor
+                    sendEmit
+                    playerSoundFileName
+                    scoreScreenNameTopMargin
+                    scoreScreenScoreTopMargin
+                    scoreScreenShowScoreButton
+                    scoreScreenShowNameButton
+                    scoreScreenScoreBgButton
+                    scoreScreenNameBgButton
+                    scoreScreenBorderButton
+                    scoreScreenBgImage
+                    playerScreenNameScoreBgOpacity
+                    */
+                    
+                    $('#answerButtonHolder').show();
+                    $('#player-score-buttons-message').hide();
+                    $('#change-player-settings').show(); 
+                    if (playerID == '') { var playerID = requestPlayerButtonID(); }
+                    if (playerName == '') { playerName = "Player " + playerCounter; }
+                    if (playerScore == '') { playerScore = '0'; }
+                    if (scoreScreenBGColor == '') { scoreScreenBGColor = '400000'; }
+                    if (scoreScreenNameTopMargin == '') { scoreScreenNameTopMargin = ''; }
+                    if (scoreScreenScoreTopMargin == '') { scoreScreenScoreTopMargin = ''; }
+                    if (scoreScreenScoreTopMargin == '') { scoreScreenScoreTopMargin = '20'; }
+                    if (scoreScreenNameTopMargin == '') { scoreScreenNameTopMargin = '20'; }
+                    if (playerScreenNameScoreBgOpacity == '') { playerScreenNameScoreBgOpacity= '1'; }
+                    $('#player-table').append("\
+                        <tr>\
+                            <td><label for='player-button-" + playerID + "' class='player-button-label'>P" + playerCounter + "</label><input id='player-button-" + playerID + "' type='checkbox'   class='player-button' checked></td>\
+                            <td><input id='player-name-input-" + playerID + "' class='text-input player-name-input ui-corner-all ui-widget'  value='"+playerName+"' maxlength='25'></td>\
+                            <td><input id='player-score-"+playerID+"' class='text-input ui-corner-all ui-widget'  value='"+playerScore+"' disabled></td>\
+                            <td><div class='form-element' id='buzzer-sound-input-file-"+playerID+"-div'><input type='file' id='buzzer-sound-input-file-"+playerID+"' name='' data-label='Select files' /></div></td>\
+                            <td><input id='playerscreen-code-input-"+playerID+"' class='text-input ui-corner-all ui-widget' maxlength='5'></td>\
+                            <td><input id='player-screen-bgcolor-"+playerID+"' class='text-input ui-corner-all ui-widget'  value='"+scoreScreenBGColor+"'></td>\
+                            <td><div class='form-element' id='scorescreen-bg-input-file-div-"+playerID+"'><input type='file' id='scorescreen-bg-input-file-"+playerID+"' name='' data-label='Select files' /></div></td>\
+                            <td><label for='score-screen-border-button-"+playerID+"' class='score-screen-settings-labels'>&nbsp;</label><input id='score-screen-border-button-"+playerID+"' type='checkbox'   class='score-screen-settings-buttons'></td>\
+                            <td><label for='score-screen-name-bg-button-"+playerID+"' class='score-screen-settings-labels'>&nbsp;</label><input id='score-screen-name-bg-button-"+playerID+"' type='checkbox'   class='score-screen-settings-buttons'></td>\
+                            <td><label for='score-screen-score-bg-button-"+playerID+"' class='score-screen-settings-labels'>&nbsp;</label><input id='score-screen-score-bg-button-"+playerID+"' type='checkbox'   class='score-screen-settings-buttons'></td>\
+                            <td><label for='score-screen-show-name-button-"+playerID+"' class='score-screen-settings-labels'>&nbsp;</label><input id='score-screen-show-name-button-"+playerID+"' type='checkbox'   class='score-screen-settings-buttons'></td>\
+                            <td><label for='score-screen-show-score-button-"+playerID+"' class='score-screen-settings-labels'>&nbsp;</label><input id='score-screen-show-score-button-"+playerID+"' type='checkbox'   class='score-screen-settings-buttons'></td>\
+                            <td><input id='player-screen-name-score-bg-opacity-"+playerID+"' class='text-input ui-corner-all ui-widget'  value='"+playerScreenNameScoreBgOpacity+"'></td>\
+                            <td><input id='player-screen-score-top-margin-"+playerID+"' class='text-input ui-corner-all ui-widget'  value='"+scoreScreenScoreTopMargin+"'></td>\
+                            <td><input id='player-screen-name-top-margin-"+playerID+"' class='text-input ui-corner-all ui-widget'  value='"+scoreScreenNameTopMargin+"'></td>\
+                        </tr>");
+                    $('#player-score-buttons').append("\
+                        <div class='playerButtonHolder'>\
+                            <label id='player-score-button-label-"+playerID+"' for='player-score-button-" + playerID + "' class='player-score-button-label'>"+playerName+"</label>\
+                            <input type='checkbox' id='player-score-button-" + playerID + "' class='player-score-button'>\
+                        </div>\
+                    ");
+                    $('#button-config-table').append("\
+                        <tr>\
+                            <td><input id='player-id-"+playerID+"' class='text-input player-name-input ui-corner-all ui-widget'  value='"+playerName+"' disabled></td>\
+                            <td><input id='player-button-screen-code-input-"+playerID+"' class='text-input ui-corner-all ui-widget'  maxlength='5' disabled></td>\
+                            <td><div id='player-buttons-connected-"+playerID+"'></div></td>\
+                        </tr>\
+                    ");
+                    $("#player-screen-name-score-bg-opacity-"+playerID).change(function() { 
+                         socket.emit('player-screen-name-score-bg-opacity-changed', controlPanelID+"|"+$(this).val()+"|"+playerID);
+                    });
+                    $("#player-screen-score-top-margin-"+playerID).change(function() { 
+                        socket.emit('player-screen-score-top-margin-changed', controlPanelID+"|"+$(this).val()+"|"+playerID);
+                        
+                    });
+                    $("#player-screen-name-top-margin-"+playerID).change(function() { 
+                        socket.emit('player-screen-name-top-margin-changed', controlPanelID+"|"+$(this).val()+"|"+playerID);
+                        
+                        
+                    });
+                    $("#score-screen-show-score-button-"+playerID).button().click(function(){
+                        if ($(this).is(':checked')){
+                            socket.emit('score-screen-show-score-button-pressed', controlPanelID+"|on|"+playerID);
+                        }
+                        else {
+                            socket.emit('score-screen-show-score-button-pressed', controlPanelID+"|off|"+playerID);
+                        }
+                    });
+                    $("#score-screen-show-name-button-"+playerID).button().click(function(){
+                        if ($(this).is(':checked')){
+                            socket.emit('score-screen-show-name-button-pressed', controlPanelID+"|on|"+playerID);
+                        }
+                        else {
+                            socket.emit('score-screen-show-name-button-pressed', controlPanelID+"|off|"+playerID);
+                        }
+                    });
+                    $("#score-screen-border-button-"+playerID).button().click(function(){
+                        if ($(this).is(':checked')){
+                            socket.emit('score-screen-border-button-pressed', controlPanelID+"|on|"+playerID);
+                        }
+                        else {
+                            socket.emit('score-screen-border-button-pressed', controlPanelID+"|off|"+playerID);
+                        }
+                    });
+                    $("#score-screen-name-bg-button-"+playerID).button().click(function(){ 
+                        if ($(this).is(':checked')){
+                            socket.emit('score-screen-name-bg-button-pressed', controlPanelID+"|on|"+playerID);
+                        }
+                        else {
+                            socket.emit('score-screen-name-bg-button-pressed', controlPanelID+"|off|"+playerID);
+                        }
+                    });
+                    $("#score-screen-score-bg-button-"+playerID).button().click(function(){ 
+                        if ($(this).is(':checked')){
+                            socket.emit('score-screen-score-bg-button-pressed', controlPanelID+"|on|"+playerID);
+                        }
+                        else {
+                            socket.emit('score-screen-score-bg-button-pressed', controlPanelID+"|off|"+playerID);
+                        }
+                    });
+                    
+                    if (scoreScreenShowScoreButton == 'on') { $('#score-screen-show-score-button-'+playerID).prop('checked', true).button( "refresh" ); }
+                    if (scoreScreenShowNameButton == 'on') { $('#score-screen-show-name-button-'+playerID).prop('checked', true).button( "refresh" );  }
+                    if (scoreScreenScoreBgButton == 'on') { $('#score-screen-score-bg-button-'+playerID).prop('checked', true).button( "refresh" ); }
+                    if (scoreScreenNameBgButton == 'on') { $('#score-screen-name-bg-button-'+playerID).prop('checked', true).button( "refresh" ); }
+                    if (scoreScreenBorderButton == 'on') { $('#score-screen-border-button-'+playerID).prop('checked', true).button( "refresh" ); }
+                    if (playerSoundFileName != 'DEFAULT' && playerSoundFileName != '' ) { 
+
+                        // request player sound from database
+                        socket.emit('request-player-sound', playerID+"|"+controlPanelID);
+                        
+
+                    }
+                    if (scoreScreenBgImage != 'DEFAULT') {
+                        // console.log('#scorescreen-bg-input-file-div-'+playerID+"|"+scoreScreenBgImage); // #scorescreen-bg-input-file-div-35268
+                        $('#scorescreen-bg-input-file-div-'+playerID).find('span').text(scoreScreenBgImage);
+                    }
+                    
+                    $("#scorescreen-bg-input-file-"+playerID).inputfile().change(function() { 
+                        var reader = new FileReader();
+                        var f = document.getElementById("scorescreen-bg-input-file-"+playerID).files;
+
+                        reader.onloadend = function () {
+                            // find the file name
+                            var fileName = $("#scorescreen-bg-input-file-div-"+playerID).find("span").text();
+                            // emit the info to the server for saving into the session array.
+                            socket.emit('scorescreen-bg-image-updated', playerID+"|"+reader.result+"|"+controlPanelID+"|"+fileName);
+                            
+                        }
+                        reader.readAsDataURL(f[0]);
+                        
+                    });
+                    $("#buzzer-sound-input-file-"+playerID).inputfile().change(function() { 
+                        var reader = new FileReader();
+                        var f = document.getElementById("buzzer-sound-input-file-"+playerID).files;
+
+                        reader.onloadend = function () {
+                            
+                            
+                            
+                            // find the file name
+                            var fileName = $("#buzzer-sound-input-file-"+playerID+"-div").find("span").text();
+                            
+                            // emit the info to the server for saving into the session array.
+                            socket.emit('player-sound-updated', playerID+"|"+reader.result+"|"+controlPanelID+"|"+fileName);
+                            
+                            // add the sound and playerID to a temp object
+                            var playerSound = {'playerID': playerID, 'soundData': reader.result};
+                            
+                            // load sounds into customBuzzerSounds array
+                            customBuzzerSounds.push(playerSound);
+                            
+                            // play the sound, just for fun
+                            playSound('pressed', playerID);
+                            
+                            
+                        }
+                        reader.readAsDataURL(f[0]);
+                    });
+                    
+                    $('#player-score-button-' + playerID ).button();
+                    $('#player-button-'+playerID).button().click(function(){ 
+                        // uncheck player-score-button-playerID on SCORING tab
+                        if ($(this).is(':checked')){
+                            $('#player-score-button-'+playerID).removeAttr("disabled");
+                            socket.emit('player-disabled-enabled-exclude', playerID+"|reset-disabled|"+controlPanelID+"|true");
+                        }
+                        else {
+                            $('#player-score-button-'+playerID).prop('disabled', true);
+                            socket.emit('player-disabled-enabled-exclude', playerID+"|disabled|"+controlPanelID+"|true");
+                        }
+                        $( ".player-score-button" ).button( "refresh" );
+                    });
+                    $('#player-name-input-'+playerID).change(function() { 
+                        socket.emit('player-name-change', controlPanelID+"|"+playerID+'|'+$(this).val());
+                        
+                        // change the name in the BUTTON CONFIG tab
+                        $('#player-id-'+playerID).val($(this).val());
+                        $("#player-score-button-label-" + playerID).text($(this).val());
+                        //$( ".player-score-button" ).button( "refresh" );
+                        //$("label[for='player-score-button-" + playerID+"']").text($(this).val());
+                        //$('#player-score-button-' + playerID).text($(this).val());
+                        
+                            
+                    } );
+
+                    if (sendEmit == '') { socket.emit('player-created',controlPanelID + "|player-name-input-"+playerID+"|player-button-"+playerID+"|" + $("#player-name-input-" + playerID + "").val()+"|"+$("#player-score-" + playerID + "").val()+"|enabled|"+playerCounter);}
+                    
+                    $("#playerscreen-code-input-"+playerID).change(function(){            
+                        socket.emit('playerscreen-code-entered', controlPanelID+"|"+$(this).val()+"|"+playerID);
+                    });
+                    $("#player-screen-bgcolor-"+playerID).change(function(){ 
+                        if ($(this).val().match(/^[0-9a-fA-F]{6}$/)) {
+                             socket.emit('player-screen-bgcolor-changed', controlPanelID+"|"+$(this).val()+"|"+playerID);
+                        }
+                        else {
+                            alert("Please input a valid HEX color code, without the #");
+                        }
+                    });
+                    $('#player-table').show();
+                    $('#startShowDiv').show();
+                    playerCounter++;
+                }
+                $("#add-player").button().click(function(){            
+                    addPlayer(''      ,''        ,''         ,''                ,''      ,''                 ,'20'                    ,'20'                     ,'on'                      ,'on'                     ,'on'                    ,'on'                   ,'on'                   ,'DEFAULT'         ,'1'                           ); 
+                    //        playerID,playerName,playerScore,scoreScreenBGColor,sendEmit,playerSoundFileName,scoreScreenNameTopMargin,scoreScreenScoreTopMargin,scoreScreenShowScoreButton,scoreScreenShowNameButton,scoreScreenScoreBgButton,scoreScreenNameBgButton,scoreScreenBorderButton,scoreScreenBgImage,playerScreenNameScoreBgOpacity
+                    /*
+                    playerID
+                    playerName
+                    playerScore
+                    scoreScreenBGColor
+                    sendEmit
+                    playerSoundFileName
+                    scoreScreenNameTopMargin
+                    scoreScreenScoreTopMargin
+                    scoreScreenShowScoreButton
+                    scoreScreenShowNameButton
+                    scoreScreenScoreBgButton
+                    scoreScreenNameBgButton
+                    scoreScreenBorderButton
+                    scoreScreenBgImage
+                    */
+                });
+                $("#scoreboard-code-input").change(function(){            
+                    socket.emit('scoreboard-code-entered', controlPanelID+"|"+$(this).val());
+                });
+                $('#scoreboard-code-input').attr('maxlength',5).css({'height': '26px','text-align':'center'});
+                
+                socket.on('loaded-show-fail', function(msg){ //'pass-fail'
+                    alert("Password Incorrect.");
+                });
+                
+                socket.on('loaded-show-ok', function(msg){ // JSON stringify object
+                    var showData = JSON.parse(msg);
+
+                        $('#newShowLoadShowDiv').hide();
+                        $('#scoring-holder').show();
+                        $( "#tabs" ).tabs( "enable" );
+                    globalShowName = showData.showName;
+                    // add players to PLAYERS tab
+                    // console.log(showData.players);
+                    if (showData.players.length > 0) { 
+                        $('#answerButtonHolder').show();
+                        $('#player-score-buttons-message').hide();
+                        $('#change-player-settings').show(); 
+                        $('#player-table').show();
+                        $('#startShowDiv').show();
+                        var playerCounter = 1;
+                    }
+                    for (i=0; i < showData.players.length; i++){
+                        addPlayer(showData.players[i].playerID,showData.players[i].playerName,showData.players[i].playerScore,showData.players[i].scoreScreenBGColor, 'false',  showData.players[i].buzzerFileName,showData.players[i].scoreScreenNameTopMargin,showData.players[i].scoreScreenScoreTopMargin,showData.players[i].scoreScreenShowScore,showData.players[i].scoreScreenShowName,showData.players[i].scoreScreenScoreBG,showData.players[i].scoreScreenNameBG,showData.players[i].scoreScreenBorder,showData.players[i].teamScoreScreenBGImage,showData.players[i].playerScreenNameScoreBgOpacity);
+                        //                            playerID                     playerName                     playerScore                     scoreScreenBGColor sendEmit,                      playerSoundFileName                scoreScreenNameTopMargin                     scoreScreenScoreTopMargin                     scoreScreenShowScoreButton               scoreScreenShowNameButton               scoreScreenScoreBgButton               scoreScreenNameBgButton              scoreScreenBorderButton               scoreScreenBgImage                          playerScreenNameScoreBgOpacity ){ 
+                        
+                        /*
+                    playerID
+                    playerName
+                    playerScore
+                    scoreScreenBGColor
+                    sendEmit
+                    playerSoundFileName
+                    scoreScreenNameTopMargin
+                    scoreScreenScoreTopMargin
+                    scoreScreenShowScoreButton
+                    scoreScreenShowNameButton
+                    scoreScreenScoreBgButton
+                    scoreScreenBorderButton
+                    scoreScreenBgImage
+                    */
+                        
+                        // get button screen code
+                        socket.emit('showLoadedRequestPushButtonID', controlPanelID+"|"+showData.players[i].playerID);
+                    }
+                    if (showData.hideTeamBgs == 'on') {
+                         $('#hide-team-bgs').prop('checked', true).button( "refresh" );
+                    }
+                    if (showData.scoreboardBorder == 'on') {
+                        $('#scoreboard-border').prop('checked', true).button( "refresh" );
+                        scoreboardBorder = 'on';
+                        socket.emit('scoreboardBorderToggle',controlPanelID+"|on");       
+                    }
+                    else {
+                        scoreboardBorder = 'off';
+                        $('#scoreboard-border').prop('checked', false).button( "refresh" );
+                        socket.emit('scoreboardBorderToggle',controlPanelID+"|off");
+                    }
+                    $('#scoreboard-top-margin-input').val(showData.scoreboardTopMargin);
+                    // update correct/incorrect scores
+                    $('#answer-correct-value').val(showData.correctScore);
+                    $('#answer-incorrect-value').val(showData.incorrectScore);
+                    // update reorder by score
+                    
+                    // update scoreboard BG color
+                    $('#scoreboard-bg-color').val(showData.scoreboardBGColor);
+                    
+                    // update SBTeamBGPlyScrBG
+                    if (showData.SBTeamBGPlyScrBG == 'enabled') {
+                        $('#SB-TeamBG-PlyScrBG').prop('checked', true).button( "refresh" );
+                        socket.emit('SB-TeamBG-PlyScrBG','_'+controlPanelID+"|enabled"); // now or enabled or disdabled
+                    }
+                    
+                    // update auto reorder button
+                    if (showData.scoreboardAutoReorder == 'enabled') {
+                        $('#auto-reorder-button').prop('checked', true).button( "refresh" );
+                        //socket.emit('reorder-by-score','now|'+controlPanelID); // now or enabled or disdabled
+                    }
+                });   
+            });
+            
+            socket.on('player-sound-received', function(msg){ // playerID|base64Sound|fileName
+                // console.log('player-sound-received: '+msg);
+                var playerDetails = msg.split("|");
+                var playerID = playerDetails[0];
+                var playerSound = playerDetails[1];
+                var fileName = playerDetails[2];     
+                // add the sound and playerID to a temp object
+                var playerSoundObj = {'playerID': playerID, 'soundData': playerSound};
+
+                // load sounds into customBuzzerSounds array
+                customBuzzerSounds.push(playerSoundObj);
+                
+                // update the load button with the filename text
+                $('#buzzer-sound-input-file-'+playerID+'-div').find('span').text(fileName);
+            });
+            
+            socket.on('player-button-screen-code-return', function(msg){ 
+                var playerDetails = msg.split("|");
+                var playerID = playerDetails[0];
+                var buttonID = playerDetails[1];
+                $("#player-button-screen-code-input-"+playerID+"").val(buttonID);
+                
+            });
+            
+
+            
+            // this comes in when the code has been entered correctly on the control panel
+            socket.on('scoreboard-added-deleted', function(msg){  // added or deleted
+                // console.log('scoreboard-added-deleted: '+msg);
+                switch (msg) {
+                    case "added" :
+                        $('.scoreboardControls').show();
+                        break;
+                    case 'deleted' :
+                        $('.scoreboardControls').hide();
+                        $('#scoreboard-code-input').val();
+                        break;
+                }
+            });
+            
+            // sent from server toi say that a player has pressed a push button
+            socket.on('Button Pressed', function(msg){ // controllerID|pushButtonID|playerID|timePressed|playerNumber
+                console.log('Button Pressed: '+msg);
+                var msgSplit = msg.split("|");
+                var controllerID = msgSplit[0];
+                var pushButtonID = msgSplit[1];
+                var playerID = msgSplit[2];
+                var timePressed = msgSplit[3];
+                var playerNumber = msgSplit[4];
+                if (!showStarted) {
+                    $('#push-button-icon-'+pushButtonID).css({'background-color':'#FF0000'});
+                    setTimeout(function() { $('#push-button-icon-'+pushButtonID).css({'background-color':'#66161d'}); },1000);
+                }
+                else {
+                    // check if it's the first press received for the round, and if so, start a half second timer to wait for other presses. this is to correct for time delays in registering the button press.
+                    if (buttonsPressedInRound.length == 0) {
+                        setTimeout(function(){
+                            // after a 200 MS delay, check which team/player pressed first
+                            buttonsPressedInRound.sort(sortFunction);
+                            
+                            
+                            // highlight the players button on the SCORING tab
+                            var nameLabelText = $("#player-score-button-label-"+buttonsPressedInRound[0][2]).text();
+                            $("#player-score-button-"+buttonsPressedInRound[0][2]).prop('checked', true);     
+                            $("#player-score-button-"+buttonsPressedInRound[0][2]).button( "refresh" );
+                            $("#player-score-button-label-"+buttonsPressedInRound[0][2]).text(nameLabelText);
+                            
+                            // and send the first buzzers detail to server to forward on to scoreboard
+                            socket.emit('first-to-buzz-in',controllerID+"|"+pushButtonID+"|"+playerID+"|"+timePressed+"|"+dateReadable+"|"+playerNumber);
+                            
+                            playSound("pressed",playerID);
+                            
+                        },200);
+                    }
+                    var date = new Date(parseInt(timePressed,10));
+                    
+                    // add zeros in front of milliseconds to total 4 digits
+                    var dateReadable = date.getHours() + ":" + date.getMinutes() + ":" + date.getSeconds() +":" + ('00' + date.getMilliseconds()).slice(-3);
+                    
+                    // check if the players button is already in array. If it is, don't add it again.
+                    var buttonInArray = false;
+                    for (i=0; i < buttonsPressedInRound.length; i++) {
+                        if ((excludeWho == 'player' && buttonsPressedInRound[i][1] == pushButtonID) || (excludeWho == 'team' && buttonsPressedInRound[i][2] == playerID)) {
+                            buttonInArray = true;
+                        }
+                    }
+                    if (!buttonInArray) {
+                        buttonsPressedInRound.push([controllerID,pushButtonID,playerID,timePressed,dateReadable,playerNumber]);
+                    }
+                } 
+            });
+            
+            socket.on('buttonsPressedArrayRequested', function(msg){ 
+                if ( typeof buttonsPressedInRound !== 'undefined' && buttonsPressedInRound) {
+                    // console.log('buttonsPressedArrayRequested');
+                    socket.emit('buttonsPressedArrayReturned',buttonsPressedInRound);
+                }
+                    
+            });          
+            socket.on('player-push-button-added', function(msg){ //controllerID|pushButtonID|playerID|playerNumber
+                var msgSplit = msg.split("|");
+                var pushButtonID = msgSplit[1];
+                var playerID = msgSplit[2];
+                var playerNumber = msgSplit[3];
+                // console.log('player-push-button-added: '+msg);
+                $('#player-buttons-connected-'+playerID).append("\
+                    <div id='push-button-icon-"+pushButtonID+"' class='fullCircle'>"+playerNumber+"</div>\
+                ");
+                
+            });
+            
+            socket.on('player-push-button-deleted', function(msg){ // pushButtonId|playerID
+                var msgSplit = msg.split("|");
+                var pushButtonID = msgSplit[0];
+                var playerID = msgSplit[1];
+                $('#push-button-icon-'+pushButtonID).remove();
+                // console.log('player-push-button-deleted: '+msg);
+            });
+            $( "#tabs" ).tabs();
+            $( "#tabs" ).tabs({heightStyle: "fill"});
+            $( "#tabs" ).tabs( "option", "disabled", [ 1, 2, 3 ] );
+            
+
+            socket.on('powerPointScoreboardWhichButtonWasPressed', function(msg){
+                $('#'+msg).click();           
+            });
+            
+            $(".answer-button").button().click(function() {
+                var buttonPressed = $(this).attr('id');                    
+                var clearBoardForNextQuestion = false;
+                $('.player-score-button:checkbox:checked').each(function(){
+                    var playerID = $(this).attr('id').replace('player-score-button-','');
+                    var nameLabelID = $(this).attr('id').replace('player-score-button-','player-score-button-label-');
+                    var currentScore = parseInt($('#player-score-'+playerID).val());
+                    var nameLabelText = $('#'+nameLabelID).text();                   
+                    $(this).prop('checked', false); 
+                    $(this).button( "refresh" );
+                    $('#'+nameLabelID).text(nameLabelText);
+                    switch (buttonPressed) {
+                        case 'answer-button-correct' :
+                                currentScore = currentScore + parseInt($('#answer-correct-value').val());
+                                socket.emit('player-score-change',controlPanelID+"|"+playerID+"|true|"+currentScore); // controlPanelID | playerID | true/false (highlight score change) | newScore
+                                socket.emit('reset-highlights', controlPanelID);
+                                $('#player-score-'+playerID).val(currentScore);
+                                if (buttonsPressedInRound.length > 0) {
+                                    playSound('correct','');
+                                }
+                                socket.emit('enable-all-players',controlPanelID);
+                                socket.emit('reorder-scoreboard',controlPanelID);
+                                buttonsPressedInRound = [];
+                            break;
+                        case 'answer-button-incorrect' :
+                                currentScore = currentScore - parseInt($('#answer-incorrect-value').val());
+                                socket.emit('player-score-change',controlPanelID+"|"+playerID+"|true|"+currentScore); // controlPanelID | playerID | true/false (highlight score change) | newScore
+                                socket.emit('reset-highlights', controlPanelID);
+                                $('#player-score-'+playerID).val(currentScore);
+                                if (buttonsPressedInRound.length > 0) {
+                                    playSound('incorrect','');
+                                }
+                                socket.emit('enable-all-players',controlPanelID);
+                                socket.emit('reorder-scoreboard',controlPanelID);
+                                buttonsPressedInRound = [];
+                            break;
+                        case 'answer-button-exclude-incorrect':
+                                currentScore = currentScore - parseInt($('#answer-incorrect-value').val());
+                                socket.emit('player-score-change',controlPanelID+"|"+playerID+"|false|"+currentScore); // controlPanelID | playerID | true/false (highlight score change) | newScore
+                                socket.emit('reset-highlights', controlPanelID);
+                                $('#player-score-'+playerID).val(currentScore);
+                                if (buttonsPressedInRound.length > 0) {
+                                    playSound('incorrect','');
+                                }
+                                socket.emit('player-disabled-enabled-exclude', playerID+"|exclude|"+controlPanelID+"|false" ); //playerID|disabled|controllerID|true/false (remove from scoreboard)
+                                socket.emit('reorder-scoreboard',controlPanelID);
+                                buttonsPressedInRound = [];
+                            break;
+                        case 'answer-button-exclude-clear':
+                                socket.emit('reset-highlights', controlPanelID);
+                                $('#player-score-'+playerID).val(currentScore);
+                                socket.emit('player-disabled-enabled-exclude', playerID+"|exclude|"+controlPanelID+"|false" ); //playerID|disabled|controllerID|true/false (remove from scoreboard)
+                                socket.emit('reorder-scoreboard',controlPanelID);
+                                buttonsPressedInRound = [];
+                            break;
+                        case 'answer-button-incorrect-next-in':
+                            
+                                if (buttonsPressedInRound.length > 0) { 
+                                    currentScore = currentScore - parseInt($('#answer-incorrect-value').val());
+                                    socket.emit('player-score-change',controlPanelID+"|"+playerID+"|true|"+currentScore); // controlPanelID | playerID | true/false (highlight score change) | newScore
+                                    socket.emit('reset-highlights', controlPanelID); 
+                                    $('#player-score-'+playerID).val(currentScore);
+                                    playSound('incorrect','');
+                                }
+                            
+                                buttonsPressedInRound.splice(0,1); // [controllerID,pushButtonID,playerID,timePressed,dateReadable,playerNumber]
+                                
+                                if (buttonsPressedInRound.length > 0) { 
+                                    if (soundPlaying == true){
+                                        setTimeout(function(){
+                                            var nameLabelText = $("#player-score-button-label-"+buttonsPressedInRound[0][2]).text();
+                                            $("#player-score-button-"+buttonsPressedInRound[0][2]).prop('checked', true);     
+                                            $("#player-score-button-"+buttonsPressedInRound[0][2]).button( "refresh" );
+                                            $("#player-score-button-label-"+buttonsPressedInRound[0][2]).text(nameLabelText);
+                                            socket.emit('first-to-buzz-in',buttonsPressedInRound[0][0]+"|"+buttonsPressedInRound[0][1]+"|"+buttonsPressedInRound[0][2]+"|"+buttonsPressedInRound[0][3]+"|"+buttonsPressedInRound[0][4]+"|"+buttonsPressedInRound[0][5]);
+                                        },1200);
+                                    }
+                                    
+                                    playSound("pressed",buttonsPressedInRound[0][2]);
+                                    
+                                }
+                                else {
+                                    clearBoardForNextQuestion = true;
+                                    buttonsPressedInRound = [];
+                                }
+                                socket.emit('reorder-scoreboard',controlPanelID);
+                            
+                                
+                            break;
+                        case 'answer-button-clear-next-in':
+
+                                if (buttonsPressedInRound.length > 0) { 
+                                    socket.emit('reset-highlights', controlPanelID); 
+                                }
+                            
+                                buttonsPressedInRound.splice(0,1); // [controllerID,pushButtonID,playerID,timePressed,dateReadable,playerNumber]
+                            
+                                if (buttonsPressedInRound.length > 0) { 
+                                    var nameLabelText = $("#player-score-button-label-"+buttonsPressedInRound[0][2]).text();
+                                    $("#player-score-button-"+buttonsPressedInRound[0][2]).prop('checked', true);     
+                                    $("#player-score-button-"+buttonsPressedInRound[0][2]).button( "refresh" );
+                                    $("#player-score-button-label-"+buttonsPressedInRound[0][2]).text(nameLabelText);
+                                    socket.emit('first-to-buzz-in',buttonsPressedInRound[0][0]+"|"+buttonsPressedInRound[0][1]+"|"+buttonsPressedInRound[0][2]+"|"+buttonsPressedInRound[0][3]+"|"+buttonsPressedInRound[0][4]+"|"+buttonsPressedInRound[0][5]);
+                                    playSound("pressed",buttonsPressedInRound[0][2]);
+                                }
+                                else {
+                                    clearBoardForNextQuestion = true;
+                                    buttonsPressedInRound = [];
+                                }
+                                
+                            break;
+                        case 'answer-button-reset-score':
+                            socket.emit('player-score-change',controlPanelID+"|"+playerID+"|false|0"); // controlPanelID | playerID | true/false (highlight score change) | newScore
+                            $('#player-score-'+playerID).val("0");
+                            socket.emit('reorder-scoreboard',controlPanelID);
+                            socket.emit('enable-all-players',controlPanelID);
+                            socket.emit('reset-highlights', controlPanelID);
+                            buttonsPressedInRound = [];
+                            break;
+                    }                    
+                }); 
+                if (buttonPressed == 'answer-button-clear') { 
+                    socket.emit('reset-highlights', controlPanelID);
+                    buttonsPressedInRound = [];
+                    socket.emit('enable-all-players',controlPanelID);
+                }
+            });
+            
+            
+            $("#answer-correct-value").spinner().on("spinstop", function(){
+                socket.emit('answer-correct-value-change', controlPanelID+"|"+$(this).val());
+            });
+            
+            $("#answer-incorrect-value").spinner().on("spinstop", function(){
+                socket.emit('answer-incorrect-value-change', controlPanelID+"|"+$(this).val());      
+            });
+            $("#change-player-settings").button().click(function() {
+                
+            });
+            $("#auto-reorder-button").button().click(function() {
+                if ($(this).is(':checked')){
+                    socket.emit('reorder-by-score','enabled|'+controlPanelID); // now or enabled or disdabled
+                    socket.emit('reorder-scoreboard',controlPanelID);
+                }
+                else {
+                    socket.emit('reorder-by-score','disabled|'+controlPanelID); // now or enabled or disdabled
+                }
+            });
+            $("#reorder-by-score-button").button().click(function() {
+                socket.emit('reorder-by-score','now|'+controlPanelID); // now or enabled or disdabled
+                                    
+            });
+
+            $("#scoreboard-bg-color").change(function() { 
+                if ($("#scoreboard-bg-color").val().match(/^[0-9a-fA-F]{6}$/)) {
+                    socket.emit('scoreboard-bg-color-change','_'+controlPanelID+"|"+$("#scoreboard-bg-color").val()); // now or enabled or disdabled
+                }
+                else {
+                   alert("Please input a valid HEX color code, without the #");
+                }
+                
+            });
+            $("#SB-TeamBG-PlyScrBG").button().click(function() {
+                if ($(this).is(':checked')){
+                    socket.emit('SB-TeamBG-PlyScrBG','_'+controlPanelID+"|enabled"); // now or enabled or disdabled
+                }
+                else {
+                    socket.emit('SB-TeamBG-PlyScrBG','_'+controlPanelID+"|disabled");
+                    
+                }
+            });
+            $("#start-show-button").button().click(function() {
+                if ($(this).is(':checked')){
+                    showStarted = true;
+                    socket.emit('showStarted',controlPanelID+"|true");
+                    //$( "#tabs" ).tabs( "option", "disabled", [ 1, 2, 3 ] );
+                }
+                else {
+                    showStarted = false;
+                    socket.emit('showStarted',controlPanelID+"|false");
+                    //$( "#tabs" ).tabs( "enable" );
+                    
+                }
+            });
+            $("#exclude-team-button").button().click(function() {
+                if ($(this).is(':checked')){
+                    $("#exclude-player-button").prop('checked', false).button( "refresh" ); 
+                    excludeWho = 'team';
+                }
+                else {
+                    $("#exclude-player-button").prop('checked', true).button( "refresh" ); 
+                    excludeWho = 'player';
+                }
+            });
+            $("#exclude-player-button").button().click(function() {
+                if ($(this).is(':checked')){
+                    $("#exclude-team-button").prop('checked', false).button( "refresh" );     
+                    excludeWho = 'player';
+                }
+                else {
+                    $("#exclude-team-button").prop('checked', true).button( "refresh" );
+                    excludeWho = 'team';
+                }
+            });
+            $("#scoreboard-bg-input-file").inputfile().change(function() { 
+                var reader = new FileReader();
+                var f = document.getElementById("scoreboard-bg-input-file").files;
+
+                reader.onloadend = function () {
+                    // find the file name
+                    var fileName = $("#scorescreen-bg-input-file-div").find("span").text();
+                    // emit the info to the server for saving into the session array.
+                    socket.emit('scoreboard-bg-image-updated', reader.result+"|"+controlPanelID+"|"+fileName);
+                            
+                }
+                reader.readAsDataURL(f[0]);
+                        
+             });
+            $("#scoreboard-border").button().click(function() {
+                if ($(this).is(':checked')){
+                    scoreboardBorder = 'on';
+                    socket.emit('scoreboardBorderToggle',controlPanelID+"|on");
+                    //$( "#tabs" ).tabs( "option", "disabled", [ 1, 2, 3 ] );
+                }
+                else {
+                    scoreboardBorder = 'off';
+                    socket.emit('scoreboardBorderToggle',controlPanelID+"|off");
+                    //$( "#tabs" ).tabs( "enable" );      
+                }
+            });
+            $("#scoreboard-top-margin-input").change(function() { 
+                socket.emit('scoreboard-top-margin-changed',controlPanelID+"|"+$(this).val());
+            });
+            
+            $("#hide-team-bgs").button().click(function() {
+                if ($(this).is(':checked')){
+                    hideTeamBgs = 'on';
+                    socket.emit('hideTeamBgs',controlPanelID+"|on");
+                }
+                else {
+                    hideTeamBgs = 'off';
+                    socket.emit('hideTeamBgs',controlPanelID+"|off");     
+                }
+            });
+            
+            
+        
+            
+            // if ($('#player-button-3').is(':checked'))
+            // $('input[type=checkbox]:checked').each(function(index){
+        });
+            
+
+         
+    </script>
+    
+    <!-- ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// -->
+    
+</head>
+<body>
+    
+    <div id='offline-div'>SCREEN IS OFF-LINE.<br>ATTEMPTING TO RECONNECT<div id='offline-div-reason'></div></div>
+    <div id="tabs">
+        <ul>
+            <li><a href="#tabs-1">SCORING</a></li>
+            <li><a href="#tabs-2">PLAYERS</a></li>
+            <li><a href="#tabs-3">SETTINGS</a></li>
+            <li><a href="#tabs-4">BUTTON CONFIG</a></li>
+            <li><a href="#tabs-5">LOG</a></li>
+            <li><a href="#tabs-6">INSTRUCTIONS</a></li>
+        </ul>
+    
+        <div id="tabs-1">
+            <div id='newShowLoadShowDiv'>
+                <table>
+                    <tr><td colspan='2'><h3>Start a new show:</h3></td></tr>
+                    <tr><td>Show Name:</td><td><input id='new-show-name-input' class='text-input new-show-name-input ui-corner-all ui-widget' maxlength='25'></td></tr>
+                    <tr><td>Show Password: </td><td><input type='password' id='new-show-password-input' class='text-input new-show-password-input ui-corner-all ui-widget' maxlength='25'></td></tr>
+                    <tr><td></td><td><button id='new-show-ok-button' class='new-show-ok-button'>OK</button></td></tr>
+                    <tr><td>&nbsp;</td></tr>
+                    
+                    <tr><td colspan='2'><h3>load an existing show:</h3></td></tr>
+                    <tr><td>Show Name:</td><td><select id="open-saved-show" class="open-saved-show"><option value="0"></option></select></td></tr>
+                    <tr><td>Show Password: </td><td><input  type='password' id='open-show-password-input' class='text-input open-show-password-input ui-corner-all ui-widget' maxlength='25'></td></tr>
+                    <tr><td></td><td><button id='open-show' class='open-show'>OPEN</button></td></tr>
+                </table>
+            </div>
+            <div id='scoring-holder'>
+                <h3>POINTS SETTINGS</h3>
+                <table>
+                    <tr><th>Correct Value</th><th>Incorrect Value</th></tr>
+                    <tr><td><input id='answer-correct-value' class='text-input' value='1'></td><td><input id='answer-incorrect-value' class='text-input' value='-1'></td></tr>
+                </table>
+                <h3>PLAYER SCORING</h3>
+
+                <div id='startShowDiv'><label for='start-show-button'>START SHOW</label><input id='start-show-button' type='checkbox'   class='start-show-button-button'><br><br><br></div>
+                <div id='player-score-buttons'></div>
+                <div id='player-score-buttons-message'>Add players via the PLAYERS tab.</div>
+                <br><br><br>
+                <div id='answerButtonHolder'>
+                    <button id='answer-button-correct' class='answer-button'>CORRECT</button>
+                    <button id='answer-button-incorrect' class='answer-button'>INCORRECT</button><br><br>      
+                    <button id='answer-button-exclude-incorrect' class='answer-button'>EXCLUDE INCORRECT</button>        
+                    <button id='answer-button-exclude-clear' class='answer-button'>EXCLUDE CLEAR</button><br><br>        
+                    <button id='answer-button-incorrect-next-in' class='answer-button'>NEXT IN INCORRECT</button>        
+                    <button id='answer-button-clear-next-in' class='answer-button'>NEXT IN CLEAR</button> <br><br>       
+                    <button id='answer-button-clear' class='answer-button'>CLEAR</button>        
+                    <button id='answer-button-reset-score' class='answer-button'>RESET SCORE</button>  
+                </div>
+
+                
+            </div>
+        </div>
+        <div id="tabs-2">
+            <button id='add-player' class=''>ADD PLAYER</button><input  class='jscolor text-input floatright' style='width: 70px; ' value="FF0000"><br><br><br>
+            <table id='player-table' > 
+                <tr><th colspan='4'>GENERAL SETTINGS</th><th colspan='11'>SCORE SCREEN SETTINGS</th></tr>
+                <tr class='header'><td>ACTIVATE</td><td>NAME</td><td>SCORE</td><td>BUZZER SOUND</td><td>SCORE SCREEN ID</td><td>BG COLOR</td><td>BG IMAGE (800X550)</td><td>BORDER</td><td>NAME<br>BG</td><td>SCORE<br>BG</td><td>SHOW<br>NAME</td><td>SHOW<br>SCORE</td><td>NAME<br>SCORE<br>BG<br>OPACITY</td><td>SCORE<br>TOP<br>MARGIN<br>IN PX</td><td>NAME<br>TOP<br>MARGIN<br>IN PX</td></tr>
+            </table>
+        </div>
+        <div id="tabs-3"> 
+
+            <table>
+                <tr><td colspan='2'><h3>SCOREBOARD SETTINGS</h3></td><td style="vertical-align:top; text-align: center;"><input  class='jscolor text-input' style='width: 70px; ' value="FF0000"></td></tr>
+                <tr><td>Scoreboard Screen Code: </td><td></td><td><input id='scoreboard-code-input' class='text-input ui-corner-all ui-widget'></td></tr>
+                <tr class='scoreboardControls'><td>Scoreboard BG Color: </td><td></td><td><input id='scoreboard-bg-color' class='text-input ui-corner-all ui-widget'></td></tr> 
+                <tr class='scoreboardControls'><td>Make Team BG's Same as Team Screen Colors: </td><td></td><td><label for='SB-TeamBG-PlyScrBG'>ON</label><input id='SB-TeamBG-PlyScrBG' type='checkbox'   class=''></td></tr> 
+                <tr class='scoreboardControls'><td>Show Team BG's: </td><td></td><td><label for='hide-team-bgs'>ON</label><input id='hide-team-bgs' type='checkbox'   class=''></td></tr> 
+                <tr class='scoreboardControls'><td>Scoreboard BG Image (800X1400): </td><td></td><td><div class='form-element' id='scoreboard-bg-input-file-div'><input type='file' id='scoreboard-bg-input-file' name='' data-label='Select files' /></div></td></tr>
+                <tr class='scoreboardControls'><td>Scoreboard Top Margin: </td><td></td><td><input id='scoreboard-top-margin-input' class='text-input ui-corner-all ui-widget' value='10'></td></tr>
+                <tr class='scoreboardControls'><td>Scoreboard Border: </td><td></td><td><label for='scoreboard-border'>ON</label><input id='scoreboard-border' type='checkbox'   class='' checked></td></tr>
+                <tr class='scoreboardControls'><td>Re-Order By Score</td><td></td><td><button id='reorder-by-score-button' class='reorder-button'>NOW</button><label for='auto-reorder-button'>AUTO</label><input id='auto-reorder-button' type='checkbox'   class='reorder-button'></td></tr>
+                <tr><td colspan='3'><h3>OTHER SETTINGS</h3></td></tr>
+                <tr class='otherSettings'><td>Exclude Team or Player: </td><td></td><td><label for='exclude-team-button'>TEAM</label><input id='exclude-team-button' type='checkbox'   class='exclude-team-button' checked><label for='exclude-player-button'>PLAYER</label><input id='exclude-player-button' type='checkbox'   class='exclude-player-button'></td></tr>
+                
+            
+            </table>
+
+       </div>
+        <div id="tabs-4">
+            <br><br><br>Go to the website <span id='window-location-host' style='font-weight: bold;'></span> and type in the code for your team.<br><br><br>
+            <div id='button-config-holder'><table id='button-config-table'><tr><th>PLAYER</th><th>BUTTON ID</th><th>BUTTONS CONNECTED</th></tr></table></div>
+        </div>
+        <div id="tabs-5"><div id="monitorScreenLogDiv"></div></div>
+        <div id="tabs-6">
+            <table>
+                <tr><td colspan='2'>In the production version, each of these screens would be open on a different device.</td></tr>
+                <tr><td colspan='2'>This demo will time out after a set period of time.</td></tr>
+                <tr><td colspan='2'>&nbsp;</td></tr>
+                <tr><td>1.</td><td>Load show 'Demo Show' on 'CONTROL SCREEN' 'SCORING' tab</td></tr>
+                <tr><td>2.</td><td>Use password 'password'</td></tr>
+                <tr><td>3.</td><td>Select 'SETTINGS' tab</td></tr>
+                <tr><td>4.</td><td>Enter the ID for the scoreboard screen</td></tr>
+                <tr><td>5.</td><td>Select 'PLAYERS' tab.</td></tr>
+                <tr><td>6.</td><td>Enter the ID for each player score screen</td></tr>
+                <tr><td>7.</td><td>Select 'BUTTON CONFIG' tab.</td></tr>
+                <tr><td>8.</td><td>Have each player visit the displayed link on their phone, preferably using mobile data network, not WiFi.</td></tr>
+                <tr><td>9.</td><td>On the page that opens, have each player type in their teams button ID.</td></tr>
+                <tr><td></td><td>As each player joins, they can see their button light up on the control and scoreboard screen.</td></tr>
+                <tr><td></td><td>There can be more than one button per team.</td></tr>
+                <tr><td>10.</td><td>Select the 'SCORING' tab.</td></tr>       
+                <tr><td>11.</td><td>Click the 'START SHOW' button.</td></tr>
+                <tr><td>12.</td><td>As players buzz in to answer the question, others will be locked out.</td></tr>
+                <tr><td></td><td>The options to reset for the next question are:</td></tr>
+                <tr><td></td><td>&nbsp;</td></tr>
+                <tr><td></td><td>'CORRECT' - The value of 'Correct Value' input box will be added to team score.</td></tr>
+                <tr><td></td><td>&nbsp;</td></tr>
+                <tr><td></td><td>'INCORRECT' - The value of 'Inorrect Value' input box will be added to team score.</td></tr>
+                <tr><td></td><td>&nbsp;</td></tr>
+                <tr><td></td><td>'CLEAR' - No scores will change</td></tr>
+                <tr><td></td><td>&nbsp;</td></tr>
+                <tr><td></td><td>'EXCLUDE INCORRECT' - will exclude the team, The value of 'Inorrect Value' input box will be added to team score, and open it up for other teams to answer.</td></tr>
+                <tr><td></td><td>&nbsp;</td></tr>
+                <tr><td></td><td>'EXCLUDE CLEAR' - will exclude the team, and open it up for other teams to answer. Scores won't be changed.</td></tr>
+                <tr><td></td><td>&nbsp;</td></tr>
+                <tr><td></td><td>'NEXT IN INCORRECT' - The value of 'Inorrect Value' input box will be added to team score. The next player who buzzed in will be selected.</td></tr>
+                <tr><td></td><td>&nbsp;</td></tr>
+                <tr><td></td><td>'NEXT IN CLEAR' - The next player who buzzed in will be selected. Scores won't be changed.</td></tr>
+                <tr><td></td><td>&nbsp;</td></tr>
+            </table>
+        </div>
+    </div>
+    <div id='footer'><div id='status'>NOT CONNECTED</div></div>
+    
+</body>
+</html>

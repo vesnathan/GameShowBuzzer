@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <style>
+        #status                     { font-weight: bold; color: #ff0000; font-size: 2vw;}
+        #footer                     { position: fixed; bottom: 0; width: 100%; }
+
+
+        
+ 
+        
+    </style>
+    <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+    <script src="/socket.io/socket.io.js"></script>
+    
+    <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+
+    
+    <!-- ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// -->
+    
+    <script>
+
+
+        
+        $( function() {
+            
+            var socket = io();
+            
+            // Tell the server we're here
+            socket.emit('new connection', "Monitor Screen");
+            
+            // Message back from server to say it hears us
+            socket.on('Monitor Screen', function(msg){         
+                // Change "Not Connected" in the footer to the control panel ID
+                $('#status').text(msg);
+                $('#status').css({color:'#00ff00'});
+                controlPanelID = msg;
+            });
+
+            $('#requestSessionArray').button().click(function(){
+                socket.emit('sessionArrayRequested','');
+            });
+            
+            $('#logSessionKeysInUse').button().click(function(){
+                socket.emit('logSessionKeysInUse','');
+            });
+            $('#controlPanelIDsUsed').button().click(function(){
+                socket.emit('controlPanelIDsUsed','');
+            });
+            $('#scoreboardIDsUsed').button().click(function(){
+                socket.emit('scoreboardIDsUsed','');
+            });
+            $('#playerScreenIDsUsed').button().click(function(){
+                socket.emit('playerScreenIDsUsed','');
+            });
+            $('#playerButtonIDsUsed').button().click(function(){
+                socket.emit('playerButtonIDsUsed','');
+            });
+            $('#playerPushButtonIDsUsed').button().click(function(){
+                socket.emit('playerPushButtonIDsUsed','');
+            });
+            $('#playerScreenIDsSocketIDs').button().click(function(){
+                socket.emit('playerScreenIDsSocketIDs','');
+            });
+            $('#playerPushButtonIDsSocketIDs').button().click(function(){
+                socket.emit('playerPushButtonIDsSocketIDs','');
+            });
+            $('#scoreboardIDsSocketIDs').button().click(function(){
+                socket.emit('scoreboardIDsSocketIDs','');
+            });
+        });
+            
+
+         
+    </script>
+    
+    <!-- ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// -->
+    
+</head>
+<body>
+    <button id='requestSessionArray'            >requestSessionArray</button>           <br><br>
+    <button id='logSessionKeysInUse'            >logSessionKeysInUse</button>           <br><br>
+    <button id='controlPanelIDsUsed'            >controlPanelIDsUsed</button>           <br><br>
+    <button id='scoreboardIDsUsed'              >scoreboardIDsUsed</button>             <br><br>
+    <button id='playerScreenIDsUsed'            >playerScreenIDsUsed</button>           <br><br>
+    <button id='playerButtonIDsUsed'            >playerButtonIDsUsed</button>           <br><br>
+    <button id='playerPushButtonIDsUsed'        >playerPushButtonIDsUsed</button>       <br><br>
+    <button id='playerScreenIDsSocketIDs'       >playerScreenIDsSocketIDs</button>      <br><br>
+    <button id='playerPushButtonIDsSocketIDs'   >playerPushButtonIDsSocketIDs</button>  <br><br>
+    <button id='scoreboardIDsSocketIDs'         >scoreboardIDsSocketIDs</button>        <br><br>
+
+    <div id='footer'><div id='status'>NOT CONNECTED</div></div>
+    
+</body>
+</html>

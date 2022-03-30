@@ -1,0 +1,87 @@
+<!doctype html>
+<html>
+<head>  
+    <title>Game Show Scoring System Demo</title> 
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=0, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+        
+        body                        { font: Tahoma, Geneva, sans-serif; background: #222222; font-size: 14px; color: #ffffff;}
+        #disabled                   { display: none; opacity:1; background-color:#000000; color: #ffffff; text-align: center; position:fixed; width:100%; height:100%; top:0px; left:0px; z-index:1000; }
+        #status                     { font-weight: bold; color: #ff0000; }
+        #footer                     { position: fixed; bottom: 0; width: 100%; }
+        
+        
+        
+        .text-input                 { height: 26px; width: 85px; text-align: center;}
+        #code-input-div             { opacity:1; background-color:#000000; color: #ffffff; text-align: center; position:fixed; width:99%; height:99%; top:0px; left:0px; z-index:1000; }
+        #code-div                   { position: relative; top: 50%; transform: translateY(-50%); font-size: 25.5vw; }
+        
+        #wrapper                    { position: fixed;  top: 0;  left: 0;  bottom: 0;  right: 0;  overflow: hidden; border: 2vw solid; background-color: #400000;}
+        
+        #nameNumberScoreHolder      { border: 1px solid #cccccc; background-color: #000000; width: 80%; padding: 2vw;   left: 0;  right: 0;  margin: 0 auto; margin-top: 2vw;}
+        #playerNumberHolder         { font-size: 4vw; color: #FFFFFF; width: 100%; text-align: center; left: 0;  right: 0;  margin: 0 auto;} 
+        #player-name                { font-size: 4vw; color: #FFFFFF; width: 100%; text-align: center; left: 0;  right: 0;  margin: 0 auto;overflow: hidden; white-space: nowrap;}
+        #player-score               { font-size: 4vw; color: #FFFFFF; width: 100%; text-align: center; left: 0;  right: 0;  margin: 0 auto;}
+        
+        #circleHolder               { position: relative; clear: both; /*top: 50%; transform: translateY(-50%); */ margin-top: 5vw;}
+        #fullCircle                 { position: relative; left: 50%;  transform: translateX(-50%); width: 50%; padding-top: 50%;  background: #66161d; border-radius: 50%; border: 1vw solid #000000; }
+        
+        .clear                      { clear: both; }
+        /*#player-score               { font-size: 25.5vw;color: #FFFFFF; width: 80%; text-align: center; border: 1px solid #cccccc; background-color: #000000;left: 0;  right: 0;  margin: 0 auto; }*/
+        
+        #disabled-div               { opacity:1; background-color:#000000; color: #ffffff; text-align: center; position:fixed; width:99%; height:99%; top:0px; left:0px; z-index:1000; display: none;}
+        .tdHeader                   { text-align: center; }
+        td                          { vertical-align: top; }
+    </style> 
+    <script src="jquery-1.12.4.js"></script>
+<script>
+    $( function() {
+        var linkArray = [];
+        linkArray.push({linkID: '1', iframeWidth: 780, iframeHeight: 885, linkAddress: '/control.html'}); 
+        linkArray.push({linkID: '2', iframeWidth: 520, iframeHeight: 885,linkAddress: '/scoreboard.html'});
+        linkArray.push({linkID: '3', iframeWidth: 200, iframeHeight: 138,linkAddress: '/playerscreen.html'});
+        linkArray.push({linkID: '4', iframeWidth: 160, iframeHeight: 138,linkAddress: '/button.html'});
+        linkArray.push({linkID: '5', iframeWidth: 160, iframeHeight: 138,linkAddress: '/button.html'});
+        linkArray.push({linkID: '6', iframeWidth: 200, iframeHeight: 138,linkAddress: '/playerscreen.html'});
+        linkArray.push({linkID: '7', iframeWidth: 160, iframeHeight: 138,linkAddress: '/button.html'});
+        linkArray.push({linkID: '8', iframeWidth: 160, iframeHeight: 138,linkAddress: '/button.html'});
+        linkArray.push({linkID: '9', iframeWidth: 200, iframeHeight: 138,linkAddress: '/playerscreen.html'});
+        linkArray.push({linkID: '10', iframeWidth: 160, iframeHeight: 138,linkAddress: '/button.html'});
+        linkArray.push({linkID: '11', iframeWidth: 160, iframeHeight: 138,linkAddress: '/button.html'});
+        linkArray.push({linkID: '12', iframeWidth: 200, iframeHeight: 138,linkAddress: '/playerscreen.html'});
+        linkArray.push({linkID: '13', iframeWidth: 160, iframeHeight: 138,linkAddress: '/button.html'});
+        linkArray.push({linkID: '14', iframeWidth: 160, iframeHeight: 138,linkAddress: '/button.html'});
+        linkArray.push({linkID: '15', iframeWidth: 200, iframeHeight: 138,linkAddress: '/playerscreen.html'});
+        linkArray.push({linkID: '16', iframeWidth: 160, iframeHeight: 138,linkAddress: '/button.html'});
+        linkArray.push({linkID: '17', iframeWidth: 160, iframeHeight: 138,linkAddress: '/button.html'});
+        linkArray.push({linkID: '18', iframeWidth: 200, iframeHeight: 138,linkAddress: '/playerscreen.html'});
+        linkArray.push({linkID: '19', iframeWidth: 160, iframeHeight: 138,linkAddress: '/button.html'});
+        linkArray.push({linkID: '20', iframeWidth: 160, iframeHeight: 138,linkAddress: '/button.html'});
+        var i=0;
+        console.log(linkArray);
+        var myInterval = setInterval(function(){
+            $('#'+linkArray[i].linkID).html("<iframe src='"+linkArray[i].linkAddress+"' width='"+linkArray[i].iframeWidth+"' height='"+linkArray[i].iframeHeight+"'>");
+            console.log(i+"|"+(linkArray.length));
+            if (i == linkArray.length-1) { clearInterval(myInterval); }
+            i++;
+        },200);
+    });
+</script>
+    </head>
+<body>
+    <table border='0'>
+        <tr><td class='tdHeader'>CONTROL SCREEN</td><td class='tdHeader'>SCOREBOARD SCREEN</td><td class='tdHeader'>SCORE SCREENS</td><td colspan='2' class='tdHeader'>BUTTONS</td></tr>
+        <tr>
+            <td  id='1' rowspan='7' valign='top'></td>
+            <td  id='2' rowspan='7' valign='top'></td>
+        </tr>
+        <tr><td id='3'></td><td id='4'></td><td id='5'></td></tr>
+        <tr><td id='6'></td><td id='7'></td><td id='8'></td></tr>
+        <tr><td id='9'></td><td id='10'></td><td id='11'></td></tr>
+        <tr><td id='12'></td><td id='13'></td><td id='14'></td></tr>
+        <tr><td id='15'></td><td id='16'></td><td id='17'></td></tr>
+        <tr><td id='18'></td><td id='19'></td><td id='20'></td></tr>
+    </table>
+</body>
+</html>
+

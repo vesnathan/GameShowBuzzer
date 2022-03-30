@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head>  
+    <title>Game Show Scoring System Demo</title> 
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=0, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+        
+        body                        { font: Tahoma, Geneva, sans-serif; background: #000000; font-size: 5vw; color: #ffffff;}
+        #wrapper                    { position: fixed;  top: 0;  left: 0;  bottom: 0;  right: 0;  overflow: hidden; padding: 2vw; background-color: #000000;}
+        table                       { width: 100%; }
+        .name                       {  text-align: center; }
+        .code                       {   text-align: center; }
+
+    </style> 
+    <link rel="stylesheet" href="/jquery-ui.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/jquery-1.12.4.js"></script>   
+    <script>
+        function getUrlVars()  {
+            var vars = [], hash;
+            var hashes = window.location.href.slice(window.location.href.indexOf('?') + 1).split('&');
+            for(var i = 0; i < hashes.length; i++)  {
+                hash = hashes[i].split('=');
+                vars.push(hash[0]);
+                vars[hash[0]] = hash[1];
+            }
+            return vars;
+        }    
+        //alert(getUrlVars()["ip"]);
+        $( function() {
+            
+            var socket = io();
+            socket.emit('new connection', "powerPointButtonCodes|"+getUrlVars()["ip"]);            
+            socket.on('powerPointButtonCodes', function(msg){  // playerName|buttonID  
+                
+                //$('#status').text(getUrlVars()["ip"]);
+                msgSplit = msg.split("|");
+                for (i = 0; i < msgSplit.length; i++) {
+                    if (i % 2 == 0) {
+                        $('#teamNameAndCode').append("<tr><td class='name'>"+msgSplit[i].toUpperCase()+":&nbsp;&nbsp;&nbsp;&nbsp;"+msgSplit[i+1]+"</td></tr><tr><td>&nbsp;</td></tr>");
+                    }
+                }
+                
+            });
+        });
+    </script>
+    </head>
+<body>
+    <div id='wrapper'>
+        <table id='teamNameAndCode'><tr><td style='font-weight: bold; text-align: center;'>BUTTON CODES</td></tr><tr><td>&nbsp;</td></tr></table>
+    </div>
+<div id='footer'><div id='status'>NOT CONNECTED</div></div>
+</body>
+</html>
