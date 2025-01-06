@@ -31,7 +31,8 @@ at http://52.62.53.91:3000/demo.html :
 	 
 	'NEXT IN CLEAR' - The next player who buzzed in will be selected. Scores won't be changed.
 # INSTALL INSTRUCTIONS
-Create ba LAMP stack LightSail Server  
+Create LAMP stack LightSail Server  
+
 Putty SSH into server
   SSH->create tunnel port 8888 destination localhost:80 and press Add
   SSH->Credentials add ppk
@@ -42,9 +43,8 @@ Putty SSH into server
 create folder /opt/bitnami/projects/gsb
 
 sudo apt install nodejs npm
-
 npm install express-ip
-
+sudo npm install -g pm2
 sudo npm install socket.io
 sudo npm install --save-optional bufferutil utf-8-validate
 
@@ -57,11 +57,20 @@ go to [localhost:](http://localhost:8888/phpmyadmin)
 create "gsb" database
 import gsb db dump
 
-in index.js, change the pw
+in index.js, change the mysql pw
 
 upload "upload" directory contents to /opt/bitnami/projects/gsb 
 
-run node index.js
+pm2 start index.js --name gsb-server
+
+To make sure the app restarts on server reboot:
+pm2 startup
+
+This will output a command you need to run to enable the startup script. Copy and run the command it provides, for example:
+
+sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u bitnami --hp /home/bitnami
+
+pm2 save
 
 
 
