@@ -8,7 +8,8 @@ sudo apt-get dist-upgrade
 sudo apt-get install apache2 -y
 
 sudo apt-get install php -y
-sudo apt-get install mysql-server php-mysql -y
+# sudo apt-get install mysql-server php-mysql -y <- depreciated 2024
+sudo apt-get install mariadb-server php-mysql -y
 sudo service apache2 restart
 
 sudo mysql_secure_installation
@@ -41,10 +42,14 @@ Download and install Putty and open
 enter ip address and port 22, select ssh
 enter a name in 'saved sessions' and click save
 got to Connection->SSH->Tunnels
-enter source port 8888 and destination localhost:80
+enter source port 8888 and destination localhost:80 click Add
 got back to 'Session'
 click save again and click open
 
+sudo nano /etc/php/8.2/cli/php.ini
+cntrl-w filesize
+xhange to 5M
+cntrl-x y enter
 
 uname phpmyadmin is phpmyadmin USE FIREFOX (NOT CHROME - PRIVELGES DON'T WORK IN CHROME)
 go to 127.0.0.1:8888/phpmyadmin/
@@ -70,6 +75,7 @@ install Node.js
 	sudo apt-get install -y nodejs
 	sudo node -v
 
+sudo apt npm
 npm init	
 
 install mysql	
